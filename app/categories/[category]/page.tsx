@@ -37,7 +37,8 @@ const CATEGORY_META: Record<string, { title: string; description: string; icon: 
 interface Props { params: { category: string } }
 
 export async function generateStaticParams() {
-  return Object.keys(CATEGORY_META).map((category) => ({ category }));
+  // Return empty — dynamicParams=true means all categories are served via ISR on first request
+  return [];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

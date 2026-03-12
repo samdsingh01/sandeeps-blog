@@ -13,8 +13,8 @@ export const dynamicParams = true; // serve slugs not in generateStaticParams
 interface Props { params: { slug: string } }
 
 export async function generateStaticParams() {
-  const slugs = await getAllPostSlugs();
-  return slugs.map((slug) => ({ slug }));
+  // Return empty — dynamicParams=true means all slugs are served via ISR on first request
+  return [];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
