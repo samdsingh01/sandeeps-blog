@@ -74,19 +74,32 @@ export async function GET() {
   // ── 7. Keyword pipeline ───────────────────────────────────────────────────
   try {
     const db = getServiceClient();
-    const { count: total } = await db
+    const { count: total, error: e1 } = await db
       .from('keywords')
       .select('*', { count: 'exact', head: true });
 
-    const { count: unused } = await db
-      .from('keywords')
-      .select('*', { count: 'exact', head: true })
-      .eq('used', false);
+    if (e1) {
+      checks.keywords = { ok: false, detail: `DB error: ${e1.message} (code: ${e1.code})` };
+    } else {
+      const { count: unused, error: e2 } = await db
+        .from('keywords')
+        .select('*', { count: 'exact', head: true })
+        .eq('used', false);
 
-    checks.keywords = {
-      ok:     (unused ?? 0) > 0,
-      detail: `${unused ?? 0} unused / ${total ?? 0} total — ${(unused ?? 0) > 30 ? 'healthy' : (unused ?? 0) > 10 ? 'running low' : '⚠️ needs refill'}`,
-    };
+      if (e2) {
+        checks.keywords = { ok: false, detail: `DB error on unused query: ${e2.message}` };
+      } else {
+        const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+        checks.keywords = {
+          ok:     (unused ?? 0) > 0,
+          detail: `${unused ?? 0} unused / ${total ?? 0} total — ${
+            !hasServiceKey ? '⚠️ SUPABASE_SERVICE_ROLE_KEY missing in Vercel' :
+            (unused ?? 0) > 30 ? 'healthy' :
+            (unused ?? 0) > 10 ? 'running low' : '⚠️ needs refill'
+          }`,
+        };
+      }
+    }
   } catch (e) {
     checks.keywords = { ok: false, detail: String(e) };
   }
