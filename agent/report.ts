@@ -22,12 +22,14 @@ export interface DailyReport {
 }
 
 interface PostSummary {
-  title:       string;
-  slug:        string;
-  category:    string;
-  readingTime: string;
-  publishedAt: string;
-  url:         string;
+  title:        string;
+  slug:         string;
+  category:     string;
+  readingTime:  string;
+  publishedAt:  string;
+  url:          string;
+  qualityScore?: number;
+  status?:      string;
 }
 
 interface AgentRunSummary {
@@ -59,7 +61,7 @@ export async function buildDailyReport(): Promise<DailyReport> {
   // ── Posts published today ─────────────────────────────────────────────────
   const { data: todayPosts } = await db
     .from('posts')
-    .select('title, slug, category, reading_time, published_at')
+    .select('title, slug, category, reading_time, published_at, quality_score, status')
     .eq('status', 'published')
     .gte('published_at', today.toISOString())
     .order('published_at', { ascending: false });
@@ -67,7 +69,7 @@ export async function buildDailyReport(): Promise<DailyReport> {
   // ── Posts this week ───────────────────────────────────────────────────────
   const { data: weekPosts } = await db
     .from('posts')
-    .select('title, slug, category, reading_time, published_at')
+    .select('title, slug, category, reading_time, published_at, quality_score, status')
     .eq('status', 'published')
     .gte('published_at', weekAgo.toISOString())
     .order('published_at', { ascending: false });
@@ -100,22 +102,23 @@ export async function buildDailyReport(): Promise<DailyReport> {
     .select('*', { count: 'exact', head: true })
     .gte('used_at', today.toISOString());
 
-  // ── Top 5 recent posts ────────────────────────────────────────────────────
+  // ── Top 5 recent posts (include quality score + status) ──────────────────
   const { data: topPosts } = await db
     .from('posts')
-    .select('title, slug, category, reading_time, published_at')
-    .eq('status', 'published')
+    .select('title, slug, category, reading_time, published_at, quality_score, status')
     .order('published_at', { ascending: false })
     .limit(5);
 
   function toSummary(p: any): PostSummary {
     return {
-      title:       p.title,
-      slug:        p.slug,
-      category:    p.category,
-      readingTime: p.reading_time,
-      publishedAt: p.published_at,
-      url:         `${SITE_URL}/blog/${p.slug}`,
+      title:        p.title,
+      slug:         p.slug,
+      category:     p.category,
+      readingTime:  p.reading_time,
+      publishedAt:  p.published_at,
+      url:          `${SITE_URL}/blog/${p.slug}`,
+      qualityScore: p.quality_score ?? undefined,
+      status:       p.status,
     };
   }
 
@@ -176,10 +179,17 @@ export function formatReportEmail(report: DailyReport): { subject: string; html:
 
   const subject = `${statusEmoji} Sandeep's Blog Daily Report — ${dateStr}`;
 
+  const qualityBadge = (score?: number) => {
+    if (!score) return '';
+    const color = score >= 80 ? '#059669' : score >= 65 ? '#d97706' : '#dc2626';
+    const label = score >= 80 ? '🟢' : score >= 65 ? '🟡' : '🔴';
+    return `<span style="font-size:11px;font-weight:700;color:${color};margin-left:6px;">${label} Q:${score}</span>`;
+  };
+
   const postRow = (p: PostSummary) => `
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">
-        <a href="${p.url}" style="color:#7c3aed;font-weight:600;text-decoration:none;">${p.title}</a><br>
+        <a href="${p.url}" style="color:#7c3aed;font-weight:600;text-decoration:none;">${p.title}</a>${qualityBadge((p as any).qualityScore)}<br>
         <span style="color:#9ca3af;font-size:12px;">${p.category} · ${p.readingTime}</span>
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;white-space:nowrap;">

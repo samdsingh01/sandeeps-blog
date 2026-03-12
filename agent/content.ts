@@ -60,9 +60,10 @@ Return ONLY the category name, nothing else.`;
  * Optionally receives feedback insights to write smarter, performance-aware content.
  */
 export async function generatePost(
-  topic: string,
-  category: string,
-  insights?: FeedbackInsights,
+  topic:           string,
+  category:        string,
+  insights?:       FeedbackInsights,
+  failureContext?: string,
 ): Promise<{ title: string; description: string; slug: string; markdown: string; tags: string[]; seoKeywords: string[]; faqs: FAQItem[] }> {
 
   // Inject performance context if available
@@ -75,40 +76,105 @@ export async function generatePost(
     ? `\nTop real search queries from Google (use these naturally in the post where relevant):\n${insights.topSearchQueries.slice(0, 8).map((q) => `  - ${q}`).join('\n')}`
     : '';
 
+  // Inject quality failure feedback on retry
+  const retryContext = failureContext ? `\n${failureContext}\n` : '';
+
   const prompt = `
-You are Sandeep Singh, co-founder of Graphy.com — a platform for creators to build and sell online courses.
-You write practical, data-driven blog posts for early-stage YouTube creators and online coaches.
+You are Sandeep Singh, co-founder of Graphy.com — a platform trusted by 50,000+ creators to build and sell online courses.
+Before starting Graphy, I spent years studying what separates YouTube channels that break through from those that stagnate. Our platform data shows us exactly how creators monetise — and most are leaving 80–90% of potential revenue on the table by relying only on AdSense.
 ${perfContext}
-Write a comprehensive, SEO and AEO-optimized blog post about: "${topic}"
+
+Write a HELPFUL, EXPERIENCE-DRIVEN blog post about: "${topic}"
 Category: ${category}
 ${queryHints}
+${retryContext}
 
-WRITING GUIDELINES:
-- Write in a direct, practical, encouraging tone (like a knowledgeable friend, not a professor)
-- Use real numbers and stats where possible (e.g. "channels with 1,000+ subscribers earn $3-$5 per 1,000 views")
-- Include 5-7 actionable sections with H2 headers
-- Add a "Quick Win" or "Pro Tip" callout in at least 2 sections
-- Mention Graphy.com naturally (not salesy) where it genuinely helps (course creation, selling knowledge)
-- End with a strong conclusion and clear next step
-- Target length: 1,500-2,000 words
-- Use markdown formatting (## for H2, **bold**, bullet lists, numbered steps)
-- AEO: include a "## Frequently Asked Questions" section at the end with 4-5 Q&A pairs covering the most common questions about this topic
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 GOOGLE COMPLIANCE RULES — NON-NEGOTIABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STRICTLY BANNED — these phrases trigger Google's Helpful Content penalty:
+❌ "In today's digital landscape" / "In today's fast-paced world"
+❌ "It's no secret that" / "Needless to say" / "Without further ado"
+❌ "Game changer" / "Revolutionize" / "Skyrocket" / "Unlock your potential"
+❌ "In conclusion," / "To summarize," / "As we've explored"
+❌ "Navigate the" / "Embark on" / "Dive deep into"
+❌ "At the end of the day" / "The bottom line is" / "Leverage your"
+❌ "When it comes to" (as a sentence opener) / "It is important to note"
+❌ Any vague filler paragraph that doesn't contain a specific insight
+
+DO NOT write for search engines. Write for a real YouTube creator who is stuck and needs help RIGHT NOW.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ E-E-A-T REQUIREMENTS (Google ranks these)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXPERIENCE — Include at least 2 of:
+- A pattern I've seen across Graphy creators (e.g. "The creators who grow fastest consistently do X...")
+- A specific creator type or scenario (e.g. "A cooking channel with 50K subscribers typically earns...")
+- Something counterintuitive I've learned (e.g. "Most creators focus on X, but our data shows Y matters more")
+
+EXPERTISE — Every section must include:
+- At least one specific number (%, $, timeframe, view count, subscriber threshold)
+- A concrete "how to" — not just "you should do X" but "here's exactly how"
+- Where relevant: mention specific tools, platforms, or tactics by name
+
+AUTHORITATIVENESS — The post must:
+- Have a "## Sandeep's Take" or "## What Most Creators Get Wrong" section with a genuine opinion
+- Mention real industry context (YouTube Partner Program thresholds, actual CPM ranges, etc.)
+- Reference real-world constraints creators face (time, budget, audience size)
+
+TRUSTWORTHINESS — Never:
+- Make up statistics without flagging them as estimates
+- Use superlatives without evidence ("the best", "the most powerful") unless verifiable
+- Claim something works without explaining why or showing the mechanism
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 STRUCTURE REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LENGTH: 1,600–2,200 words (anything under 1,400 will be rejected)
+
+REQUIRED SECTIONS (use these exact patterns):
+1. Opening paragraph — hook with a specific problem or surprising stat (NO generic intro)
+2. At least 5 ## H2 sections, each with 200+ words
+3. One "## What Most [Creators/YouTubers/Coaches] Get Wrong About [Topic]" section
+4. One "## Sandeep's Take" or "## My Take" box — short, direct personal opinion
+5. One "## [Topic]: Step-by-Step" or numbered action section
+6. One "> **Pro Tip:**" or "> **Quick Win:**" blockquote per major section
+7. "## Key Takeaways" or "## Action Plan" near the end (bullet list)
+8. "## Frequently Asked Questions" at the very end — 5 Q&A pairs
+
+TONE:
+- Write like you're texting a smart friend who's building a YouTube channel
+- Be direct. Say what doesn't work, not just what does.
+- Short sentences. No academic language.
+- Use "you" not "one" or "creators should"
+
+GRAPHY MENTIONS (max 2, must be natural):
+- Only mention Graphy.com where it genuinely solves a problem being discussed
+- Frame it as a solution, not an ad: "If you want to build a course around this, [Graphy.com](https://graphy.com) makes it straightforward to..."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Return a JSON object with this exact structure:
 {
-  "title": "SEO-optimized title (50-60 chars)",
-  "description": "Meta description (150-160 chars, includes keyword)",
+  "title": "SEO title (50-60 chars, includes primary keyword, compelling for humans)",
+  "description": "Meta description (150-160 chars, includes keyword, ends with a benefit or question)",
   "slug": "url-friendly-slug-with-hyphens",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "seo_keywords": ["primary keyword", "secondary keyword 1", "secondary keyword 2"],
+  "seo_keywords": ["primary keyword", "secondary keyword 1", "secondary keyword 2", "secondary keyword 3"],
   "faqs": [
-    { "question": "What is the best way to...?", "answer": "The best way is..." },
-    { "question": "How long does it take to...?", "answer": "It typically takes..." }
+    { "question": "Specific question a creator would google?", "answer": "Direct 2-3 sentence answer with specific detail." },
+    { "question": "How long does it take to...?", "answer": "Realistic timeframe with context." },
+    { "question": "What is the difference between X and Y?", "answer": "Clear comparison." },
+    { "question": "Is [topic] worth it for small channels?", "answer": "Honest answer." },
+    { "question": "What are the biggest mistakes in [topic]?", "answer": "2-3 specific mistakes." }
   ],
-  "markdown": "## Introduction\\n\\nFull post content here... (include the FAQ section in the markdown too)"
+  "markdown": "Full post content in markdown (1600+ words, all required sections included)"
 }
 
-Return ONLY the JSON object, no other text.`;
+Return ONLY the JSON object. No preamble, no explanation, no markdown fences.`;
 
   const raw     = await ask(prompt, 4096, 0.75);
   const cleaned = stripJsonFences(raw);
