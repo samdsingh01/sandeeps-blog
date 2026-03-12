@@ -1,27 +1,22 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // ── Lazy public client ─────────────────────────────────────────────────────
-// Created on first use (not at module load) so build-time bundling never throws
-let _publicClient: ReturnType<typeof createClient> | null = null;
+// Using a getter function so createClient() is never called at module load time.
+// This prevents build-time failures when env vars aren't available yet.
+let _publicClient: SupabaseClient | null = null;
 
-export const supabase: ReturnType<typeof createClient> = new Proxy(
-  {} as ReturnType<typeof createClient>,
-  {
-    get(_: unknown, prop: string) {
-      if (!_publicClient) {
-        _publicClient = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
-      }
-      return (_publicClient as any)[prop];
-    },
+export function getPublicClient(): SupabaseClient {
+  if (!_publicClient) {
+    _publicClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
   }
-);
+  return _publicClient;
+}
 
 // ── Service client (agent only — full DB access) ───────────────────────────
-// Also lazy — reads env vars only when called at runtime
-export function getServiceClient() {
+export function getServiceClient(): SupabaseClient {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
