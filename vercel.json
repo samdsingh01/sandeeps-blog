@@ -8,6 +8,10 @@
     {
       "path":     "/api/agent/report",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path":     "/api/agent/sync",
+      "schedule": "0 10 * * *"
     }
   ],
   "env": {

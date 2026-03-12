@@ -26,6 +26,11 @@ export function getServiceClient(): SupabaseClient {
 }
 
 // ── Database types ──────────────────────────────────────────────────────────
+export interface DbFAQItem {
+  question: string;
+  answer:   string;
+}
+
 export interface DbPost {
   id:           string;
   slug:         string;
@@ -40,6 +45,7 @@ export interface DbPost {
   cover_image:  string;
   seo_keywords: string[];
   reading_time: string;
+  faq:          DbFAQItem[] | null;
   featured:     boolean;
   status:       'draft' | 'published';
   published_at: string;

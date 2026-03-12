@@ -1,4 +1,6 @@
-import { getPublicClient, DbPost } from './supabase';
+import { getPublicClient, DbPost, DbFAQItem } from './supabase';
+
+export type FAQItem = DbFAQItem;
 
 export interface PostMeta {
   slug:        string;
@@ -17,6 +19,7 @@ export interface PostMeta {
 
 export interface Post extends PostMeta {
   content: string;
+  faqs:    FAQItem[];  // AEO: FAQ structured data
 }
 
 function toPostMeta(row: DbPost): PostMeta {
@@ -37,7 +40,11 @@ function toPostMeta(row: DbPost): PostMeta {
 }
 
 function toPost(row: DbPost): Post {
-  return { ...toPostMeta(row), content: row.content_html };
+  return {
+    ...toPostMeta(row),
+    content: row.content_html,
+    faqs:    row.faq ?? [],
+  };
 }
 
 export async function getAllPosts(): Promise<PostMeta[]> {

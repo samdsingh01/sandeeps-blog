@@ -2,22 +2,33 @@
  * agent/index.ts
  * ==============
  * Main orchestrator — called by the Vercel Cron API route.
- * Full pipeline: keyword → content → image → DB write.
+ *
+ * Pipeline (with feedback loop):
+ *   0. Fetch GSC performance insights (what's ranking, what's working)
+ *   1. Pick today's keyword — boosted toward hot topic clusters
+ *   2. Classify category
+ *   3. Generate post — Gemini sees real ranking data + top search queries
+ *   4. Render markdown → HTML
+ *   5. Fetch cover image
+ *   6. Write to Supabase (with FAQs for AEO)
+ *   7. Mark keyword as used
  */
 
-import { getServiceClient }                            from '../lib/supabase';
-import { pickTodaysTopic, markKeywordUsed }            from './keywords';
+import { getServiceClient }                                                      from '../lib/supabase';
+import { pickTodaysTopic, markKeywordUsed }                                      from './keywords';
 import { classifyCategory, generatePost, renderMarkdown, calcReadingTime, slugify } from './content';
-import { fetchCoverImage }                             from './images';
-import { logRun }                                      from './logger';
+import { fetchCoverImage }                                                       from './images';
+import { logRun }                                                                from './logger';
+import { getFeedbackInsights }                                                   from './feedback';
 
 export interface AgentRunResult {
-  success:  boolean;
-  postSlug?: string;
-  title?:    string;
-  error?:    string;
-  skipped?:  boolean;
-  reason?:   string;
+  success:    boolean;
+  postSlug?:  string;
+  title?:     string;
+  error?:     string;
+  skipped?:   boolean;
+  reason?:    string;
+  hadInsights?: boolean;
 }
 
 /**
@@ -29,6 +40,15 @@ export async function runAgent(): Promise<AgentRunResult> {
   const db = getServiceClient();
 
   try {
+    // ── 0. Load performance feedback (silently skipped if GSC not set up) ──
+    console.log('[Agent] Loading performance insights...');
+    const insights = await getFeedbackInsights().catch(() => null);
+    if (insights?.hasData) {
+      console.log(`[Agent] Feedback: ${insights.topPerformers.length} top performers, ${insights.quickWins.length} quick wins, hot categories: ${insights.hotCategories.join(', ')}`);
+    } else {
+      console.log('[Agent] No GSC feedback yet — running without performance context');
+    }
+
     // ── 1. Get all existing slugs to avoid duplicates ──────────────────────
     const { data: existing } = await db
       .from('posts')
@@ -44,15 +64,17 @@ export async function runAgent(): Promise<AgentRunResult> {
     const category = await classifyCategory(topic);
     console.log(`[Agent] Category: ${category}`);
 
-    // ── 4. Generate post content ───────────────────────────────────────────
-    const { title, description, slug: rawSlug, tags, seoKeywords, markdown } =
-      await generatePost(topic, category);
+    // ── 4. Generate post — pass insights so Gemini writes smarter content ──
+    const { title, description, slug: rawSlug, tags, seoKeywords, faqs, markdown } =
+      await generatePost(topic, category, insights ?? undefined);
 
     // Ensure unique slug
     let slug = rawSlug || slugify(title);
     if (existingSlugs.includes(slug)) {
       slug = `${slug}-${Date.now()}`;
     }
+
+    console.log(`[Agent] Generated: "${title}" (${faqs.length} FAQs for AEO)`);
 
     // ── 5. Render markdown → HTML ──────────────────────────────────────────
     const contentHtml = await renderMarkdown(markdown);
@@ -75,6 +97,7 @@ export async function runAgent(): Promise<AgentRunResult> {
       cover_image:  coverImage,
       seo_keywords: seoKeywords,
       reading_time: readingTime,
+      faq:          faqs.length > 0 ? faqs : null,
       featured:     false,
       status:       'published',
       published_at: new Date().toISOString(),
@@ -92,11 +115,16 @@ export async function runAgent(): Promise<AgentRunResult> {
       runType:    'content_generation',
       status:     'success',
       postSlug:   slug,
-      details:    { title, category, topic, tags, wordCount: markdown.split(' ').length },
+      details:    {
+        title, category, topic, tags,
+        wordCount:   markdown.split(' ').length,
+        faqCount:    faqs.length,
+        hadInsights: insights?.hasData ?? false,
+      },
       durationMs,
     });
 
-    return { success: true, postSlug: slug, title };
+    return { success: true, postSlug: slug, title, hadInsights: insights?.hasData ?? false };
 
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
