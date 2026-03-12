@@ -16,11 +16,18 @@ const CATEGORIES = [
 ];
 
 export default async function HomePage() {
-  const [featured, allPosts] = await Promise.all([
-    getFeaturedPosts(),
-    getAllPosts(),
-  ]);
-  const latest = allPosts.slice(0, 6);
+  let featured: Awaited<ReturnType<typeof getFeaturedPosts>> = [];
+  let latest: Awaited<ReturnType<typeof getAllPosts>> = [];
+  try {
+    const [featuredData, allPosts] = await Promise.all([
+      getFeaturedPosts(),
+      getAllPosts(),
+    ]);
+    featured = featuredData;
+    latest = allPosts.slice(0, 6);
+  } catch (e) {
+    console.error('Homepage data fetch failed:', e);
+  }
 
   return (
     <>

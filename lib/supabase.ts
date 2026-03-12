@@ -7,21 +7,22 @@ let _publicClient: SupabaseClient | null = null;
 
 export function getPublicClient(): SupabaseClient {
   if (!_publicClient) {
-    _publicClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // Use server-side env vars (no NEXT_PUBLIC_ prefix needed — all fetching is server-side)
+    const url  = process.env.SUPABASE_URL  ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) {
+      throw new Error(`Supabase env vars missing. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel.`);
+    }
+    _publicClient = createClient(url, anon);
   }
   return _publicClient;
 }
 
 // ── Service client (agent only — full DB access) ───────────────────────────
 export function getServiceClient(): SupabaseClient {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
+  const url        = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return createClient(url!, serviceKey!, { auth: { persistSession: false } });
 }
 
 // ── Database types ──────────────────────────────────────────────────────────

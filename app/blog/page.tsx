@@ -11,10 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default async function BlogPage() {
-  const [posts, categories] = await Promise.all([
-    getAllPosts(),
-    getAllCategories(),
-  ]);
+  let posts: Awaited<ReturnType<typeof getAllPosts>> = [];
+  let categories: Awaited<ReturnType<typeof getAllCategories>> = [];
+  try {
+    [posts, categories] = await Promise.all([getAllPosts(), getAllCategories()]);
+  } catch (e) {
+    console.error('Blog page data fetch failed:', e);
+  }
 
   return (
     <div className="py-12">
