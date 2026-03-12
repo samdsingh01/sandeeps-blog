@@ -5,7 +5,8 @@
  * Covers: new posts, agent activity, keyword pipeline, total blog health.
  */
 
-import { getServiceClient } from '../lib/supabase';
+import { getServiceClient }            from '../lib/supabase';
+import { getDailyStrategy, DailyStrategy } from './strategy';
 
 export interface DailyReport {
   date:            string;
@@ -15,6 +16,7 @@ export interface DailyReport {
   agentRunsToday:  AgentRunSummary[];
   keywordStats:    KeywordStats;
   topPosts:        PostSummary[];
+  strategy?:       DailyStrategy;
 }
 
 interface PostSummary {
@@ -115,6 +117,14 @@ export async function buildDailyReport(): Promise<DailyReport> {
     };
   }
 
+  // Get daily strategy (non-blocking — if it fails, report still sends)
+  let strategy: DailyStrategy | undefined;
+  try {
+    strategy = await getDailyStrategy();
+  } catch (err) {
+    console.error('[Report] Strategy generation failed (non-fatal):', err);
+  }
+
   return {
     date:           now.toISOString(),
     newPostsToday:  (todayPosts ?? []).map(toSummary),
@@ -134,6 +144,7 @@ export async function buildDailyReport(): Promise<DailyReport> {
       usedToday: usedToday      ?? 0,
     },
     topPosts: (topPosts ?? []).map(toSummary),
+    strategy,
   };
 }
 
@@ -190,6 +201,107 @@ export function formatReportEmail(report: DailyReport): { subject: string; html:
       <p style="color:#ddd6fe;margin:8px 0 0;font-size:14px;">${dateStr}</p>
       <p style="color:#fff;margin:16px 0 0;font-size:36px;font-weight:900;">${report.totalPosts} <span style="font-size:16px;font-weight:400;color:#ddd6fe;">total posts published</span></p>
     </div>
+
+    <!-- 🎯 Goal: 10K Monthly Traffic -->
+    ${report.strategy ? (() => {
+      const s          = report.strategy!.snapshot;
+      const pct        = Math.min(100, s.percentToGoal);
+      const barColor   = pct >= 75 ? '#059669' : pct >= 40 ? '#d97706' : '#7c3aed';
+      const daysMsg    = s.daysToGoal
+        ? `~${s.daysToGoal} days to go at current pace`
+        : s.monthlyClicks >= 10000
+          ? '🎉 Goal reached!'
+          : 'Not enough data yet — keep publishing';
+      return `
+    <div style="background:#fff;border-radius:12px;border:2px solid #7c3aed;margin-bottom:24px;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="margin:0;font-size:16px;font-weight:800;color:#374151;">🎯 Goal: 10,000 Monthly Visitors</h2>
+        <span style="font-size:13px;color:#6b7280;">${daysMsg}</span>
+      </div>
+      <div style="background:#f3f4f6;border-radius:999px;height:16px;overflow:hidden;margin-bottom:12px;">
+        <div style="background:${barColor};height:100%;width:${pct}%;border-radius:999px;transition:width 0.3s;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:22px;font-weight:900;color:${barColor};">${s.monthlyClicks.toLocaleString()} <span style="font-size:13px;font-weight:400;color:#6b7280;">/ 10,000 monthly</span></span>
+        <span style="font-size:13px;color:#6b7280;align-self:flex-end;">Projected: <strong style="color:#374151;">${s.projectedMonthly.toLocaleString()}/mo</strong></span>
+      </div>
+    </div>`;
+    })() : ''}
+
+    <!-- 🧠 Today's Focus (from strategic advisor) -->
+    ${report.strategy ? `
+    <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:20px;margin-bottom:24px;">
+      <h2 style="margin:0 0 8px;font-size:15px;font-weight:800;color:#92400e;">🧠 Today's Strategic Focus</h2>
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">${report.strategy.todaysFocus}</p>
+      <div style="background:#fef3c7;border-radius:8px;padding:10px 12px;">
+        <span style="font-size:12px;font-weight:700;color:#92400e;">⛔ BOTTLENECK: </span>
+        <span style="font-size:12px;color:#92400e;">${report.strategy.bottleneck}</span>
+      </div>
+    </div>` : ''}
+
+    <!-- 💡 Strategic Recommendations -->
+    ${report.strategy && report.strategy.topRecommendations.length > 0 ? `
+    <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;margin-bottom:20px;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;background:#f0fdf4;">
+        <h2 style="margin:0;font-size:16px;font-weight:700;color:#374151;">💡 Strategic Recommendations</h2>
+        <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">AI-generated daily — ranked by impact toward 10K goal</p>
+      </div>
+      ${report.strategy.topRecommendations.slice(0, 6).map((rec) => {
+        const catColor: Record<string, string> = {
+          content: '#7c3aed', distribution: '#2563eb', product: '#059669',
+          gtm: '#dc2626', technical: '#d97706', budget: '#0891b2',
+        };
+        const catEmoji: Record<string, string> = {
+          content: '✍️', distribution: '📣', product: '🛠️',
+          gtm: '🤝', technical: '⚙️', budget: '💰',
+        };
+        const color = catColor[rec.category] ?? '#374151';
+        const emoji = catEmoji[rec.category] ?? '💡';
+        const impactDot = rec.impact === 'high' ? '🔴' : rec.impact === 'medium' ? '🟡' : '🟢';
+        return `
+        <div style="padding:14px 20px;border-bottom:1px solid #f9fafb;">
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            <span style="background:${color}20;color:${color};font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap;margin-top:2px;">${emoji} ${rec.category.toUpperCase()}</span>
+            <div style="flex:1;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#111827;">${rec.action}</p>
+              <p style="margin:0;font-size:12px;color:#6b7280;">${rec.why}</p>
+              <div style="margin-top:6px;font-size:11px;color:#9ca3af;">${impactDot} ${rec.impact} impact · ${rec.effort} effort · ${rec.timeframe}</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+
+    <!-- 🎲 This Week's Milestone + Contrarian Move -->
+    ${report.strategy ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+      <div style="background:#eff6ff;border-radius:12px;padding:16px;border:1px solid #bfdbfe;">
+        <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">📅 This Week's Milestone</div>
+        <p style="margin:0;font-size:12px;color:#1e40af;line-height:1.5;">${report.strategy.weeklyMilestone}</p>
+      </div>
+      <div style="background:#fdf2f8;border-radius:12px;padding:16px;border:1px solid #f0abfc;">
+        <div style="font-size:13px;font-weight:700;color:#7e22ce;margin-bottom:6px;">⚡ Contrarian Move</div>
+        <p style="margin:0;font-size:12px;color:#6b21a8;line-height:1.5;">${report.strategy.contrarian}</p>
+      </div>
+    </div>` : ''}
+
+    <!-- 💰 Budget Allocation -->
+    ${report.strategy && report.strategy.budgetAllocation.breakdown.length > 0 ? `
+    <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;margin-bottom:20px;padding:20px;">
+      <h2 style="margin:0 0 12px;font-size:16px;font-weight:700;color:#374151;">💰 $500 Monthly Budget Allocation</h2>
+      ${report.strategy.budgetAllocation.breakdown.map((item) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#374151;">${item.category}</div>
+            <div style="font-size:11px;color:#9ca3af;">${item.description}</div>
+          </div>
+          <div style="font-size:15px;font-weight:800;color:#059669;">$${item.amount}</div>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding-top:10px;">
+        <span style="font-size:13px;font-weight:700;color:#374151;">Total Allocated</span>
+        <span style="font-size:15px;font-weight:900;color:#7c3aed;">$${report.strategy.budgetAllocation.breakdown.reduce((s, i) => s + i.amount, 0)} / $${report.strategy.budgetAllocation.total}</span>
+      </div>
+    </div>` : ''}
 
     <!-- Stats Row -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;">
