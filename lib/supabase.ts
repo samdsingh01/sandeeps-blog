@@ -1,19 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 
-// ── Public client (used by Next.js pages — read-only via RLS) ──────────────
-const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// ── Lazy public client ─────────────────────────────────────────────────────
+// Created on first use (not at module load) so build-time bundling never throws
+let _publicClient: ReturnType<typeof createClient> | null = null;
 
-export const supabase = createClient(supabaseUrl, supabaseAnon);
+export const supabase = new Proxy(
+  {} as ReturnType<typeof createClient>,
+  {
+    get(_: unknown, prop: string) {
+      if (!_publicClient) {
+        _publicClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+      }
+      return (_publicClient as any)[prop];
+    },
+  }
+);
 
-// ── Service client (used by agent API route — full access) ─────────────────
-// Only available server-side; never exposed to the browser
+// ── Service client (agent only — full DB access) ───────────────────────────
+// Also lazy — reads env vars only when called at runtime
 export function getServiceClient() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
-  return createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false },
-  });
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
 }
 
 // ── Database types ──────────────────────────────────────────────────────────
@@ -39,14 +52,14 @@ export interface DbPost {
 }
 
 export interface DbKeyword {
-  id:           string;
-  keyword:      string;
+  id:            string;
+  keyword:       string;
   search_volume: string | null;
-  difficulty:   string | null;
-  priority:     number;
-  used:         boolean;
-  used_at:      string | null;
-  created_at:   string;
+  difficulty:    string | null;
+  priority:      number;
+  used:          boolean;
+  used_at:       string | null;
+  created_at:    string;
 }
 
 export interface DbAgentLog {
