@@ -30,8 +30,9 @@
  *   ...rest      - Any other <a> props
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { buildGraphyURL, buildGraphyURLStatic, UTMParams } from "@/lib/utm";
+import { trackCTAClick } from "@/lib/analytics";
 
 interface GraphyLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   path?: string;
@@ -70,12 +71,19 @@ export default function GraphyLink({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, utmSource, utmMedium, utmCampaign, utmContent, utmTerm]);
 
+  // Fire GA4 cta_click event on every click
+  const handleClick = useCallback(() => {
+    const label = utmContent ?? utmCampaign ?? 'graphy-link';
+    trackCTAClick(label, href);
+  }, [href, utmContent, utmCampaign]);
+
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       className={className}
+      onClick={handleClick}
       {...rest}
     >
       {children}

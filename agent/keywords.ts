@@ -2,11 +2,13 @@
  * agent/keywords.ts
  * =================
  * Researches and manages keyword opportunities.
- * Stores keywords in Supabase keywords table.
+ * Pipeline: Google Trends → Gemini (expand) → DataForSEO (real volume) → Supabase
  */
 
 import { ask, askFast, stripJsonFences } from './gemini';
-import { getServiceClient } from '../lib/supabase';
+import { getServiceClient }              from '../lib/supabase';
+import { getRelatedTrendingQueries }     from './trends';
+import { getKeywordMetrics }             from './dataforseo';
 
 interface KeywordResult {
   keyword:       string;
@@ -15,48 +17,91 @@ interface KeywordResult {
   priority:      number;
 }
 
+const NICHE_SEEDS = [
+  'youtube monetization',
+  'online course creation',
+  'youtube channel growth',
+  'sell online course',
+  'content creator business',
+];
+
 /**
- * Generate new keyword ideas and store them in the DB
+ * Full keyword research pipeline:
+ * 1. Pull trending queries from Google Trends
+ * 2. Use Gemini to expand into long-tail blog topics
+ * 3. Score each with real search volume from DataForSEO
+ * 4. Store top keywords in Supabase ranked by priority
  */
 export async function researchKeywords(niche: string, count = 20): Promise<KeywordResult[]> {
+  console.log(`[Keywords] Researching niche: "${niche}"`);
+
+  // ── Step 1: Google Trends — what's trending right now ────────────────────
+  let trendingQueries: string[] = [];
+  try {
+    trendingQueries = await getRelatedTrendingQueries(niche);
+    console.log(`[Keywords] Trends: ${trendingQueries.length} queries`);
+  } catch (err) {
+    console.warn('[Keywords] Trends failed, skipping:', err);
+  }
+
+  const trendingContext = trendingQueries.length > 0
+    ? `\n\nCurrently trending related searches:\n${trendingQueries.map((q) => `- ${q}`).join('\n')}`
+    : '';
+
+  // ── Step 2: Gemini — expand into long-tail keywords ───────────────────────
   const prompt = `
 You are an expert SEO researcher for a blog targeting early-stage YouTube creators and online coaches.
 
-Generate ${count} high-value, low-competition long-tail keyword opportunities for the niche: "${niche}"
+Generate ${count} high-value long-tail keyword opportunities for the niche: "${niche}"
+${trendingContext}
 
 Focus on:
 - "how to" queries (high intent)
-- beginner questions (high volume)
-- monetization topics (high buyer intent)
+- Beginner questions (high volume, low competition)
+- Monetization and income topics (high buyer intent)
 - YouTube-specific terms
-- Course creation queries
+- Course creation and selling
+- AI tools for creators
 
-Return ONLY a JSON array like this:
-[
-  {
-    "keyword": "how to monetize a youtube channel with 1000 subscribers",
-    "search_volume": "8,100/mo",
-    "difficulty": "low",
-    "priority": 9
-  }
-]
+Return ONLY a JSON array:
+[{ "keyword": "how to monetize youtube with 1000 subscribers", "search_volume": "estimated", "difficulty": "low", "priority": 8 }]
 
-Priority 1-10 (10 = highest value). Return valid JSON only, no other text.`;
+Priority 1-10 (10 = highest). Return valid JSON only.`;
 
-  const raw = await ask(prompt, 2048, 0.6);
-  const cleaned = stripJsonFences(raw);
-
-  let keywords: KeywordResult[] = [];
+  const raw  = await ask(prompt, 2048, 0.6);
+  let geminiKeywords: KeywordResult[] = [];
   try {
-    keywords = JSON.parse(cleaned);
+    geminiKeywords = JSON.parse(stripJsonFences(raw));
   } catch {
-    console.error('Failed to parse keyword JSON:', cleaned.slice(0, 200));
+    console.error('[Keywords] Failed to parse Gemini response');
     return [];
   }
 
-  // Store in Supabase (upsert to avoid duplicates)
-  const db = getServiceClient();
-  const rows = keywords.map((k) => ({
+  // ── Step 3: DataForSEO — real search volume ───────────────────────────────
+  const keywordStrings = geminiKeywords.map((k) => k.keyword.toLowerCase().trim());
+  let scored = geminiKeywords;
+
+  try {
+    const metrics = await getKeywordMetrics(keywordStrings);
+    console.log(`[Keywords] DataForSEO: got metrics for ${metrics.length} keywords`);
+
+    scored = geminiKeywords.map((gk) => {
+      const m = metrics.find((m) => m.keyword === gk.keyword.toLowerCase().trim());
+      if (!m || m.searchVolume === 0) return gk;
+      return {
+        keyword:       gk.keyword,
+        search_volume: `${m.searchVolume.toLocaleString()}/mo`,
+        difficulty:    m.difficulty,
+        priority:      m.priority,
+      };
+    });
+  } catch (err) {
+    console.warn('[Keywords] DataForSEO failed, using Gemini estimates:', err);
+  }
+
+  // ── Step 4: Store in Supabase ─────────────────────────────────────────────
+  const db   = getServiceClient();
+  const rows = scored.map((k) => ({
     keyword:       k.keyword.toLowerCase().trim(),
     search_volume: k.search_volume,
     difficulty:    k.difficulty,
@@ -68,68 +113,56 @@ Priority 1-10 (10 = highest value). Return valid JSON only, no other text.`;
     .from('keywords')
     .upsert(rows, { onConflict: 'keyword', ignoreDuplicates: true });
 
-  if (error) console.error('Error storing keywords:', error);
-  else console.log(`Stored ${rows.length} keywords`);
+  if (error) console.error('[Keywords] Store error:', error);
+  else console.log(`[Keywords] Stored ${rows.length} keywords`);
 
-  return keywords;
+  return scored;
 }
 
 /**
- * Get the best unused keyword from the DB to write about next
+ * Get highest-priority unused keyword from DB
  */
 export async function getNextKeyword(): Promise<string | null> {
   const db = getServiceClient();
   const { data, error } = await db
-    .from('keywords')
-    .select('keyword')
+    .from('keywords').select('keyword')
     .eq('used', false)
     .order('priority', { ascending: false })
-    .limit(1)
-    .single();
-
+    .limit(1).single();
   if (error || !data) return null;
   return data.keyword;
 }
 
 /**
- * Mark a keyword as used after a post is written for it
+ * Mark a keyword as used after its post is written
  */
 export async function markKeywordUsed(keyword: string): Promise<void> {
   const db = getServiceClient();
-  await db
-    .from('keywords')
+  await db.from('keywords')
     .update({ used: true, used_at: new Date().toISOString() })
     .eq('keyword', keyword.toLowerCase().trim());
 }
 
 /**
- * Decide the best topic to write about today
+ * Pick today's topic — uses DB first, runs full research if empty
  */
 export async function pickTodaysTopic(existingSlugs: string[]): Promise<string> {
-  // First check if we have unused keywords in the DB
   const nextKeyword = await getNextKeyword();
-  if (nextKeyword) return nextKeyword;
-
-  // If no keywords in DB, generate fresh ones
-  console.log('No unused keywords found — generating new batch...');
-  const niches = [
-    'YouTube monetization for beginners',
-    'online course creation',
-    'creator economy 2026',
-    'YouTube SEO and growth',
-  ];
-  const niche = niches[Math.floor(Math.random() * niches.length)];
-  const newKeywords = await researchKeywords(niche, 15);
-
-  if (newKeywords.length > 0) {
-    return newKeywords[0].keyword;
+  if (nextKeyword) {
+    console.log(`[Keywords] Using: "${nextKeyword}"`);
+    return nextKeyword;
   }
 
-  // Absolute fallback
-  const fallbackPrompt = `
-Suggest one specific, searchable blog post topic for early-stage YouTube creators.
-Focus on practical how-to content or monetization.
-Return ONLY the topic title, nothing else.`;
+  console.log('[Keywords] DB empty — running full research pipeline...');
+  const seed        = NICHE_SEEDS[Math.floor(Math.random() * NICHE_SEEDS.length)];
+  const newKeywords = await researchKeywords(seed, 20);
 
-  return askFast(fallbackPrompt, 100, 0.8);
+  if (newKeywords.length > 0) {
+    return newKeywords.sort((a, b) => b.priority - a.priority)[0].keyword;
+  }
+
+  return askFast(
+    'Suggest one specific searchable blog post topic for early-stage YouTube creators. Return ONLY the topic.',
+    100, 0.8
+  );
 }
