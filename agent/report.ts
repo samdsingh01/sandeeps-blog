@@ -5,18 +5,20 @@
  * Covers: new posts, agent activity, keyword pipeline, total blog health.
  */
 
-import { getServiceClient }            from '../lib/supabase';
-import { getDailyStrategy, DailyStrategy } from './strategy';
+import { getServiceClient }                          from '../lib/supabase';
+import { getDailyStrategy, DailyStrategy }            from './strategy';
+import { getPendingDistribution, formatDistributionForEmail, DistributionDrafts } from './distribute';
 
 export interface DailyReport {
-  date:            string;
-  newPostsToday:   PostSummary[];
-  postsThisWeek:   PostSummary[];
-  totalPosts:      number;
-  agentRunsToday:  AgentRunSummary[];
-  keywordStats:    KeywordStats;
-  topPosts:        PostSummary[];
-  strategy?:       DailyStrategy;
+  date:                string;
+  newPostsToday:       PostSummary[];
+  postsThisWeek:       PostSummary[];
+  totalPosts:          number;
+  agentRunsToday:      AgentRunSummary[];
+  keywordStats:        KeywordStats;
+  topPosts:            PostSummary[];
+  strategy?:           DailyStrategy;
+  distributionDrafts?: DistributionDrafts[];
 }
 
 interface PostSummary {
@@ -125,12 +127,20 @@ export async function buildDailyReport(): Promise<DailyReport> {
     console.error('[Report] Strategy generation failed (non-fatal):', err);
   }
 
+  // Get distribution drafts for today's posts (non-blocking)
+  let distributionDrafts: DistributionDrafts[] | undefined;
+  try {
+    distributionDrafts = await getPendingDistribution();
+  } catch (err) {
+    console.error('[Report] Distribution drafts failed (non-fatal):', err);
+  }
+
   return {
-    date:           now.toISOString(),
-    newPostsToday:  (todayPosts ?? []).map(toSummary),
-    postsThisWeek:  (weekPosts  ?? []).map(toSummary),
-    totalPosts:     totalPosts  ?? 0,
-    agentRunsToday: (agentLogs  ?? []).map((l: any) => ({
+    date:                now.toISOString(),
+    newPostsToday:       (todayPosts ?? []).map(toSummary),
+    postsThisWeek:       (weekPosts  ?? []).map(toSummary),
+    totalPosts:          totalPosts  ?? 0,
+    agentRunsToday:      (agentLogs  ?? []).map((l: any) => ({
       status:     l.status,
       runType:    l.run_type,
       postSlug:   l.post_slug,
@@ -143,8 +153,9 @@ export async function buildDailyReport(): Promise<DailyReport> {
       unused:    unusedKeywords ?? 0,
       usedToday: usedToday      ?? 0,
     },
-    topPosts: (topPosts ?? []).map(toSummary),
+    topPosts:            (topPosts ?? []).map(toSummary),
     strategy,
+    distributionDrafts,
   };
 }
 
@@ -302,6 +313,11 @@ export function formatReportEmail(report: DailyReport): { subject: string; html:
         <span style="font-size:15px;font-weight:900;color:#7c3aed;">$${report.strategy.budgetAllocation.breakdown.reduce((s, i) => s + i.amount, 0)} / $${report.strategy.budgetAllocation.total}</span>
       </div>
     </div>` : ''}
+
+    <!-- 📢 Distribution Drafts -->
+    ${report.distributionDrafts && report.distributionDrafts.length > 0
+      ? formatDistributionForEmail(report.distributionDrafts)
+      : ''}
 
     <!-- Stats Row -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;">

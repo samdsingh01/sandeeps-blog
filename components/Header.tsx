@@ -8,7 +8,7 @@ const NAV = [
   { label: "YouTube Monetization", href: "/categories/youtube-monetization" },
   { label: "Course Creation", href: "/categories/course-creation" },
   { label: "Creator Growth", href: "/categories/creator-growth" },
-  { label: "AI for Creators", href: "/categories/ai-for-creators" },
+  { label: "🧮 YT Earnings Calculator", href: "/tools/youtube-earnings-calculator" },
 ];
 
 export default function Header() {

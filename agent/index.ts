@@ -22,6 +22,7 @@ import { fetchCoverImage }                                                      
 import { logRun }                                                                from './logger';
 import { getFeedbackInsights }                                                   from './feedback';
 import { runInternalLinking }                                                    from './links';
+import { generateDistributionDrafts }                                            from './distribute';
 
 export interface AgentRunResult {
   success:    boolean;
@@ -113,6 +114,11 @@ export async function runAgent(): Promise<AgentRunResult> {
     // ── 9. Internal linking — runs async, doesn't block or fail the publish ─
     runInternalLinking(slug).catch((err) =>
       console.error('[Agent] Internal linking error (non-fatal):', err)
+    );
+
+    // ── 10. Distribution drafts — async, ready for tomorrow's email report ──
+    generateDistributionDrafts(slug).catch((err) =>
+      console.error('[Agent] Distribution drafts error (non-fatal):', err)
     );
 
     const durationMs = Date.now() - startTime;

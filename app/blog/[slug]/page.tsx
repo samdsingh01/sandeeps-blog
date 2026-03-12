@@ -5,6 +5,8 @@ import AuthorBio from "@/components/AuthorBio";
 import BlogCard from "@/components/BlogCard";
 import { getPost, getAllPostSlugs, getRelatedPosts } from "@/lib/posts";
 import GraphyLink from "@/components/GraphyLink";
+import QuickAnswer from "@/components/QuickAnswer";
+import NewsletterSignup from "@/components/NewsletterSignup";
 
 // ISR — new posts served within 60 seconds, no rebuild needed
 export const revalidate = 60;
@@ -137,12 +139,30 @@ export default async function BlogPostPage({ params }: Props) {
             ))}
           </div>
 
+          {/* Quick Answer box — targets Google Featured Snippets + AI answer engines */}
+          {post.faqs && post.faqs.length > 0 && (
+            <QuickAnswer
+              question={post.faqs[0].question}
+              answer={post.faqs[0].answer}
+            />
+          )}
+
           {/* Body */}
           <div className="prose-blog"
             dangerouslySetInnerHTML={{ __html: post.content }} />
 
+          {/* Newsletter — mid-content capture */}
+          <div className="mt-10">
+            <NewsletterSignup
+              variant="banner"
+              source="blog-post"
+              title="Get weekly creator growth tactics"
+              subtitle="Join creators getting actionable tips on YouTube growth, course monetization, and the creator economy. Free, no spam."
+            />
+          </div>
+
           {/* CTA Box */}
-          <div className="mt-12 bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl p-8 text-white text-center">
+          <div className="mt-8 bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl p-8 text-white text-center">
             <h3 className="text-xl font-black mb-2">Ready to sell your knowledge?</h3>
             <p className="text-brand-200 text-sm mb-5">
               Graphy lets you build and sell online courses in minutes — no tech skills required. Trusted by 50,000+ creators.
