@@ -16,8 +16,9 @@
  *   3. agent/report.ts    — SEO performance section in daily email
  */
 
-import { fetchPagePerformance, fetchTopQueries } from './gsc';
-import { getServiceClient }                       from '../lib/supabase';
+import { fetchPagePerformance, fetchTopQueries }      from './gsc';
+import { fetchGA4Metrics, buildGA4PromptContext, GA4SiteMetrics } from './ga4';
+import { getServiceClient }                              from '../lib/supabase';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,14 +34,15 @@ export interface PageInsight {
 }
 
 export interface FeedbackInsights {
-  hasData:          boolean;        // false if GSC not configured yet
-  topPerformers:    PageInsight[];  // high clicks, position 1-5
-  quickWins:        PageInsight[];  // 50+ impressions, position 5-20 → push to page 1
-  underperformers:  PageInsight[];  // 30+ days live, still 0 clicks
-  hotCategories:    string[];       // categories that get most traffic
-  hotTopics:        string[];       // specific topic patterns that work
-  topSearchQueries: string[];       // actual queries people use
-  agentPromptCtx:   string;         // formatted context string for Gemini prompts
+  hasData:          boolean;           // false if neither GSC nor GA4 configured
+  topPerformers:    PageInsight[];     // high clicks, position 1-5 (from GSC)
+  quickWins:        PageInsight[];     // 50+ impressions, position 5-20 → push to page 1
+  underperformers:  PageInsight[];     // 30+ days live, still 0 clicks
+  hotCategories:    string[];          // categories that get most traffic
+  hotTopics:        string[];          // specific topic patterns that work
+  topSearchQueries: string[];          // actual queries people use (from GSC)
+  ga4Metrics?:      GA4SiteMetrics;   // full GA4 data (traffic sources, engagement, CTAs)
+  agentPromptCtx:   string;            // formatted context string for Gemini prompts
 }
 
 // ── Main analysis function ────────────────────────────────────────────────────
@@ -52,18 +54,24 @@ export async function getFeedbackInsights(): Promise<FeedbackInsights> {
     topSearchQueries: [], agentPromptCtx: '',
   };
 
-  // Fetch GSC + post metadata in parallel
-  const [gscPages, topQueriesData] = await Promise.allSettled([
+  // Fetch GSC + GA4 + post metadata in parallel
+  const [gscPages, topQueriesData, ga4Data] = await Promise.allSettled([
     fetchPagePerformance(28),
     fetchTopQueries(28, 25),
+    fetchGA4Metrics(28),
   ]);
 
-  const pages = gscPages.status === 'fulfilled' ? gscPages.value : [];
-  const queries = topQueriesData.status === 'fulfilled' ? topQueriesData.value : [];
+  const pages      = gscPages.status      === 'fulfilled' ? gscPages.value      : [];
+  const queries    = topQueriesData.status === 'fulfilled' ? topQueriesData.value : [];
+  const ga4Metrics = ga4Data.status        === 'fulfilled' ? ga4Data.value        : null;
 
-  if (pages.length === 0) {
-    console.log('[Feedback] No GSC data — agent running without performance feedback');
+  if (pages.length === 0 && !ga4Metrics) {
+    console.log('[Feedback] No GSC or GA4 data — agent running without performance feedback');
     return EMPTY;
+  }
+
+  if (ga4Metrics) {
+    console.log(`[Feedback] GA4: ${ga4Metrics.totalSessions} sessions, ${ga4Metrics.channels.find(c => c.channel.toLowerCase().includes('organic'))?.percentage ?? 0}% organic`);
   }
 
   // Get post metadata from Supabase
@@ -131,11 +139,14 @@ export async function getFeedbackInsights(): Promise<FeedbackInsights> {
   const topSearchQueries = queries.map((q) => q.query).slice(0, 20);
 
   // Build the context string Gemini will see when generating content
-  const agentPromptCtx = buildAgentContext({
+  // Merges GSC (search rankings) + GA4 (user behaviour) for a complete picture
+  const gscCtx = buildAgentContext({
     topPerformers, quickWins, hotCategories, hotTopics, topSearchQueries,
   });
+  const ga4Ctx = ga4Metrics ? buildGA4PromptContext(ga4Metrics) : '';
+  const agentPromptCtx = [gscCtx, ga4Ctx].filter(Boolean).join('\n');
 
-  console.log(`[Feedback] Insights: ${topPerformers.length} top, ${quickWins.length} quick wins, ${underperformers.length} underperformers`);
+  console.log(`[Feedback] Insights: ${topPerformers.length} top, ${quickWins.length} quick wins, ${underperformers.length} underperformers${ga4Metrics ? `, GA4: ${ga4Metrics.totalSessions} sessions` : ''}`);
 
   return {
     hasData: true,
@@ -145,6 +156,7 @@ export async function getFeedbackInsights(): Promise<FeedbackInsights> {
     hotCategories,
     hotTopics,
     topSearchQueries,
+    ga4Metrics: ga4Metrics ?? undefined,
     agentPromptCtx,
   };
 }

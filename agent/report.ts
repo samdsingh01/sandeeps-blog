@@ -8,6 +8,7 @@
 import { getServiceClient }                          from '../lib/supabase';
 import { getDailyStrategy, DailyStrategy }            from './strategy';
 import { getPendingDistribution, formatDistributionForEmail, DistributionDrafts } from './distribute';
+import { fetchGA4Metrics, GA4SiteMetrics }            from './ga4';
 
 export interface DailyReport {
   date:                string;
@@ -19,6 +20,7 @@ export interface DailyReport {
   topPosts:            PostSummary[];
   strategy?:           DailyStrategy;
   distributionDrafts?: DistributionDrafts[];
+  ga4?:                GA4SiteMetrics;
 }
 
 interface PostSummary {
@@ -138,6 +140,15 @@ export async function buildDailyReport(): Promise<DailyReport> {
     console.error('[Report] Distribution drafts failed (non-fatal):', err);
   }
 
+  // Get GA4 metrics for the last 7 days (non-blocking)
+  let ga4: GA4SiteMetrics | undefined;
+  try {
+    const result = await fetchGA4Metrics(7);
+    if (result) ga4 = result;
+  } catch (err) {
+    console.error('[Report] GA4 metrics failed (non-fatal):', err);
+  }
+
   return {
     date:                now.toISOString(),
     newPostsToday:       (todayPosts ?? []).map(toSummary),
@@ -159,6 +170,7 @@ export async function buildDailyReport(): Promise<DailyReport> {
     topPosts:            (topPosts ?? []).map(toSummary),
     strategy,
     distributionDrafts,
+    ga4,
   };
 }
 
@@ -386,6 +398,117 @@ export function formatReportEmail(report: DailyReport): { subject: string; html:
         ${report.topPosts.map(postRow).join('')}
       </table>
     </div>
+
+    <!-- 📊 GA4 Traffic Analytics -->
+    ${report.ga4 ? (() => {
+      const g          = report.ga4!;
+      const organic    = g.channels.find((c) => c.channel.toLowerCase().includes('organic'));
+      const direct     = g.channels.find((c) => c.channel.toLowerCase() === 'direct');
+      const social     = g.channels.find((c) => c.channel.toLowerCase().includes('social'));
+      const totalCTAs  = g.ctaClicks.reduce((s, e) => s + e.eventCount, 0);
+      const avgSec     = Math.round(g.avgEngagementSec);
+      const engageIcon = avgSec > 120 ? '🟢' : avgSec > 60 ? '🟡' : '🔴';
+
+      const channelBar = (name: string, pct: number, color: string) =>
+        `<div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+            <span style="color:#374151;">${name}</span>
+            <span style="font-weight:700;color:#374151;">${pct}%</span>
+          </div>
+          <div style="background:#f3f4f6;border-radius:999px;height:8px;">
+            <div style="background:${color};height:100%;width:${pct}%;border-radius:999px;"></div>
+          </div>
+        </div>`;
+
+      const topPageRows = g.topPages.slice(0, 8).map((p) =>
+        `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f9fafb;font-size:13px;color:#374151;">
+            <a href="https://sandeeps.co${p.pagePath}" style="color:#7c3aed;text-decoration:none;">/blog/${p.slug.slice(0,40)}</a>
+          </td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f9fafb;font-size:12px;text-align:center;color:#6b7280;">${p.sessions}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f9fafb;font-size:12px;text-align:center;color:#6b7280;">${Math.round(p.engagementRate*100)}%</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f9fafb;font-size:12px;text-align:center;color:#6b7280;">${Math.round(p.avgEngagementSec)}s</td>
+        </tr>`
+      ).join('');
+
+      return `
+    <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;margin-bottom:20px;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;background:#f0f9ff;">
+        <h2 style="margin:0;font-size:16px;font-weight:700;color:#374151;">📊 GA4 Traffic — Last 7 Days</h2>
+        <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">Real user behaviour: sessions, engagement, CTA conversions</p>
+      </div>
+      <div style="padding:20px;">
+
+        <!-- Summary stats -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+          ${[
+            { label: 'Sessions',     value: g.totalSessions.toLocaleString(), color: '#7c3aed' },
+            { label: 'Users',        value: g.totalUsers.toLocaleString(),    color: '#059669' },
+            { label: 'Avg Time',     value: `${avgSec}s ${engageIcon}`,       color: '#d97706' },
+            { label: 'CTA Clicks',   value: totalCTAs.toString(),             color: '#dc2626' },
+          ].map(({ label, value, color }) =>
+            `<div style="text-align:center;background:#f9fafb;border-radius:8px;padding:12px;">
+              <div style="font-size:20px;font-weight:900;color:${color};">${value}</div>
+              <div style="font-size:11px;color:#6b7280;margin-top:2px;">${label}</div>
+            </div>`
+          ).join('')}
+        </div>
+
+        <!-- Traffic channels -->
+        <p style="font-size:13px;font-weight:600;color:#374151;margin:0 0 12px;">Traffic Sources</p>
+        ${channelBar('🔍 Organic Search', organic?.percentage ?? 0, '#4285f4')}
+        ${channelBar('🔗 Direct',          direct?.percentage  ?? 0, '#059669')}
+        ${channelBar('📱 Social',          social?.percentage  ?? 0, '#f97316')}
+        ${g.channels.filter(c => !['direct','organic search','social'].some(k => c.channel.toLowerCase().includes(k))).slice(0,2).map(c =>
+          channelBar(`↗ ${c.channel}`, c.percentage, '#9ca3af')
+        ).join('')}
+
+        <!-- CTA clicks breakdown -->
+        ${totalCTAs > 0 ? `
+        <p style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 8px;">Graphy CTA Clicks by Button</p>
+        ${g.ctaClicks.slice(0,5).map(e => `
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f9fafb;font-size:13px;">
+            <span style="color:#374151;">${e.label || e.eventName}</span>
+            <span style="font-weight:700;color:#7c3aed;">${e.eventCount} clicks</span>
+          </div>`).join('')}
+        ` : `<p style="font-size:13px;color:#9ca3af;margin:16px 0 0;">No CTA clicks yet — consider adding stronger calls to action on high-traffic pages.</p>`}
+
+        <!-- Top pages table -->
+        <p style="font-size:13px;font-weight:600;color:#374151;margin:20px 0 8px;">Top Pages by Sessions</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <tr style="background:#f9fafb;">
+            <th style="padding:6px 12px;text-align:left;color:#6b7280;font-weight:600;">PAGE</th>
+            <th style="padding:6px 12px;text-align:center;color:#6b7280;font-weight:600;">SESSIONS</th>
+            <th style="padding:6px 12px;text-align:center;color:#6b7280;font-weight:600;">ENGAGED</th>
+            <th style="padding:6px 12px;text-align:center;color:#6b7280;font-weight:600;">AVG TIME</th>
+          </tr>
+          ${topPageRows}
+        </table>
+
+        <!-- Device + country mini row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+          <div>
+            <p style="font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;">DEVICE SPLIT</p>
+            ${g.deviceSplit.slice(0,3).map(d =>
+              `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;">
+                <span style="color:#374151;">${d.device}</span>
+                <span style="color:#6b7280;">${d.sessions} sessions</span>
+              </div>`
+            ).join('')}
+          </div>
+          <div>
+            <p style="font-size:12px;font-weight:600;color:#6b7280;margin:0 0 6px;">TOP COUNTRIES</p>
+            ${g.topCountries.slice(0,4).map(c =>
+              `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;">
+                <span style="color:#374151;">${c.country}</span>
+                <span style="color:#6b7280;">${c.sessions} sessions</span>
+              </div>`
+            ).join('')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+    })() : ''}
 
     <!-- Keyword Pipeline -->
     <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;margin-bottom:20px;padding:20px;">
