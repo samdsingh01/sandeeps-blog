@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f766e"/>
+      <stop offset="50%" style="stop-color:#0891b2"/>
+      <stop offset="100%" style="stop-color:#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.15)"/>
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0.05)"/>
+    </linearGradient>
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="50"/>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="rgba(0,0,0,0.25)"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="200" cy="150" r="300" fill="rgba(255,255,255,0.05)" filter="url(#blur)"/>
+  <circle cx="1100" cy="480" r="220" fill="rgba(0,0,0,0.12)" filter="url(#blur)"/>
+
+  <!-- Grid lines -->
+  <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+    <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- Main card -->
+  <rect x="80" y="80" width="680" height="470" rx="24" fill="url(#card)" stroke="rgba(255,255,255,0.2)" stroke-width="1" filter="url(#shadow)"/>
+
+  <!-- Category badge -->
+  <rect x="112" y="112" width="200" height="36" rx="18" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <text x="212" y="135" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="white" text-anchor="middle">📝 Content Strategy</text>
+
+  <!-- Main icon -->
+  <text x="112" y="240" font-size="80" font-family="system-ui">🔍</text>
+
+  <!-- Title -->
+  <text x="112" y="300" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="800" fill="white" letter-spacing="-0.5">YouTube SEO Strategy:</text>
+  <text x="112" y="346" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="800" fill="white" letter-spacing="-0.5">Get More Views in 2026</text>
+
+  <rect x="112" y="368" width="60" height="4" rx="2" fill="rgba(255,255,255,0.6)"/>
+
+  <text x="112" y="405" font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="rgba(255,255,255,0.85)">Rank higher, get discovered, and grow</text>
+  <text x="112" y="430" font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="rgba(255,255,255,0.85)">your channel with proven SEO tactics</text>
+
+  <!-- Author -->
+  <circle cx="130" cy="497" r="18" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+  <text x="130" y="503" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="white" text-anchor="middle">S</text>
+  <text x="158" y="494" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="white">Sandeep Singh</text>
+  <text x="158" y="512" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.7)">Co-founder, Graphy.com</text>
+
+  <!-- Right side - SEO chart/graph -->
+  <rect x="830" y="120" width="300" height="200" rx="16" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <text x="980" y="148" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="rgba(255,255,255,0.8)" text-anchor="middle">Channel Growth</text>
+
+  <!-- Bar chart -->
+  <rect x="860" y="260" width="30" height="50" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <rect x="905" y="230" width="30" height="80" rx="4" fill="rgba(255,255,255,0.35)"/>
+  <rect x="950" y="200" width="30" height="110" rx="4" fill="rgba(255,255,255,0.5)"/>
+  <rect x="995" y="165" width="30" height="145" rx="4" fill="#4ade80"/>
+  <rect x="1040" y="140" width="30" height="170" rx="4" fill="#4ade80"/>
+
+  <!-- Trend line -->
+  <polyline points="875,270 920,250 965,215 1010,185 1055,158" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" fill="none" stroke-dasharray="none"/>
+  <circle cx="875" cy="270" r="4" fill="white"/>
+  <circle cx="920" cy="250" r="4" fill="white"/>
+  <circle cx="965" cy="215" r="4" fill="white"/>
+  <circle cx="1010" cy="185" r="4" fill="white"/>
+  <circle cx="1055" cy="158" r="6" fill="#4ade80" stroke="white" stroke-width="2"/>
+
+  <!-- X labels -->
+  <text x="875" y="305" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">Jan</text>
+  <text x="920" y="305" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">Mar</text>
+  <text x="965" y="305" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">May</text>
+  <text x="1010" y="305" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">Aug</text>
+  <text x="1055" y="305" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">Now</text>
+
+  <!-- SEO stats -->
+  <rect x="830" y="345" width="135" height="100" rx="16" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+  <text x="897" y="382" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="800" fill="#4ade80" text-anchor="middle">3x</text>
+  <text x="897" y="404" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.7)" text-anchor="middle">More Views</text>
+  <text x="897" y="422" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">with SEO</text>
+
+  <rect x="995" y="345" width="135" height="100" rx="16" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+  <text x="1062" y="382" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="800" fill="#7dd3fc" text-anchor="middle">#1</text>
+  <text x="1062" y="404" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.7)" text-anchor="middle">Rank Target</text>
+  <text x="1062" y="422" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">YouTube + Google</text>
+
+  <!-- Graphy branding -->
+  <rect x="830" y="475" width="300" height="50" rx="12" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="980" y="506" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="rgba(255,255,255,0.8)" text-anchor="middle">🚀 creatorlaunchpad.graphy.com</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="605" width="1200" height="25" fill="rgba(0,0,0,0.3)"/>
+  <text x="600" y="622" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.5)" text-anchor="middle">Creator Launchpad by Graphy.com · SEO Strategies for YouTube Creators</text>
+</svg>

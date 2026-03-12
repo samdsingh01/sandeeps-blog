@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply bg-white text-gray-900 font-sans antialiased; }
+  h1,h2,h3,h4,h5,h6 { @apply font-bold tracking-tight; }
+}
+
+@layer components {
+  .prose-blog {
+    @apply prose prose-lg max-w-none
+      prose-headings:font-bold prose-headings:tracking-tight
+      prose-p:leading-relaxed prose-p:text-gray-700
+      prose-strong:text-gray-900
+      prose-pre:bg-gray-900 prose-pre:text-gray-100;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700
+      text-white font-semibold px-6 py-3 rounded-full transition-all
+      shadow-md hover:shadow-lg hover:-translate-y-0.5;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 border-2 border-brand-600
+      text-brand-600 hover:bg-brand-50 font-semibold px-6 py-3
+      rounded-full transition-all;
+  }
+
+  .category-badge {
+    @apply inline-block text-xs font-semibold uppercase tracking-wider
+      px-3 py-1 rounded-full bg-brand-100 text-brand-700;
+  }
+
+  .tag-badge {
+    @apply inline-block text-xs font-medium px-2.5 py-1 rounded-full
+      bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors;
+  }
+}
+
+/* Article prose additions */
+.prose-blog table { @apply w-full border-collapse text-sm; }
+.prose-blog th { @apply bg-brand-600 text-white px-4 py-2 text-left; }
+.prose-blog td { @apply border border-gray-200 px-4 py-2; }
+.prose-blog tr:nth-child(even) { @apply bg-gray-50; }

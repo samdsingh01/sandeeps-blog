@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+    <clipPath id="circle">
+      <circle cx="200" cy="200" r="200"/>
+    </clipPath>
+    <linearGradient id="blazer" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c5cfe0"/>
+      <stop offset="100%" style="stop-color:#a8b8cc"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="200" cy="200" r="200" fill="url(#bg)"/>
+  <circle cx="200" cy="200" r="196" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+
+  <g clip-path="url(#circle)">
+    <!-- Body base (black t-shirt) -->
+    <ellipse cx="200" cy="395" rx="145" ry="90" fill="#111111"/>
+
+    <!-- Light blue blazer -->
+    <path d="M 55 420 Q 68 310 98 282 L 200 345 L 200 420 Z" fill="url(#blazer)"/>
+    <path d="M 345 420 Q 332 310 302 282 L 200 345 L 200 420 Z" fill="url(#blazer)"/>
+
+    <!-- Lapels -->
+    <path d="M 200 345 L 156 285 L 142 312 L 200 395" fill="#111111"/>
+    <path d="M 200 345 L 244 285 L 258 312 L 200 395" fill="#111111"/>
+
+    <!-- Neck -->
+    <rect x="174" y="256" width="52" height="38" rx="10" fill="#b87a4e"/>
+
+    <!-- Head -->
+    <ellipse cx="200" cy="183" rx="77" ry="85" fill="#c07a48"/>
+
+    <!-- Dark hair -->
+    <path d="M 123 163 Q 123 104 162 91 Q 181 85 200 84 Q 219 85 238 91 Q 277 104 277 163
+             Q 271 126 254 108 Q 232 91 200 90 Q 168 91 146 108 Q 129 126 123 163 Z"
+          fill="#1a1010"/>
+    <path d="M 123 163 Q 122 138 133 122 Q 137 137 134 158 Z" fill="#1a1010"/>
+    <path d="M 277 163 Q 278 138 267 122 Q 263 137 266 158 Z" fill="#1a1010"/>
+
+    <!-- Ears -->
+    <ellipse cx="123" cy="190" rx="13" ry="18" fill="#b87a4e"/>
+    <ellipse cx="277" cy="190" rx="13" ry="18" fill="#b87a4e"/>
+    <ellipse cx="123" cy="190" rx="7" ry="10" fill="#a06840"/>
+    <ellipse cx="277" cy="190" rx="7" ry="10" fill="#a06840"/>
+
+    <!-- Sideburns -->
+    <path d="M 126 172 Q 130 152 140 144 Q 134 163 127 180 Z" fill="#1a1010"/>
+    <path d="M 274 172 Q 270 152 260 144 Q 266 163 273 180 Z" fill="#1a1010"/>
+
+    <!-- Stubble/beard shadow -->
+    <path d="M 138 228 Q 155 258 200 264 Q 245 258 262 228 Q 254 252 200 260 Q 146 252 138 228" fill="rgba(25,12,8,0.35)"/>
+    <path d="M 177 221 Q 192 228 200 225 Q 208 228 223 221 Q 217 234 200 232 Q 183 234 177 221" fill="rgba(25,12,8,0.3)"/>
+
+    <!-- Nose -->
+    <ellipse cx="200" cy="210" rx="12" ry="10" fill="#b06840"/>
+    <ellipse cx="194" cy="217" rx="4" ry="3" fill="#8a4828"/>
+    <ellipse cx="206" cy="217" rx="4" ry="3" fill="#8a4828"/>
+
+    <!-- Left eye -->
+    <ellipse cx="171" cy="183" rx="20" ry="13" fill="#f0e0c4"/>
+    <circle cx="171" cy="184" r="8" fill="#2e1808"/>
+    <circle cx="171" cy="184" r="5" fill="#160800"/>
+    <circle cx="173" cy="181" r="2.5" fill="white" opacity="0.85"/>
+    <path d="M 151 179 Q 171 172 191 179" fill="none" stroke="#160800" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Left eyebrow -->
+    <path d="M 151 165 Q 167 161 191 165" fill="none" stroke="#1a1010" stroke-width="4.5" stroke-linecap="round"/>
+
+    <!-- Right eye -->
+    <ellipse cx="229" cy="183" rx="20" ry="13" fill="#f0e0c4"/>
+    <circle cx="229" cy="184" r="8" fill="#2e1808"/>
+    <circle cx="229" cy="184" r="5" fill="#160800"/>
+    <circle cx="231" cy="181" r="2.5" fill="white" opacity="0.85"/>
+    <path d="M 209 179 Q 229 172 249 179" fill="none" stroke="#160800" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Right eyebrow -->
+    <path d="M 209 165 Q 233 161 249 165" fill="none" stroke="#1a1010" stroke-width="4.5" stroke-linecap="round"/>
+
+    <!-- GLASSES — round frames, thin dark tortoiseshell -->
+    <circle cx="171" cy="184" r="22" fill="none" stroke="#1c1008" stroke-width="3.8"/>
+    <circle cx="229" cy="184" r="22" fill="none" stroke="#1c1008" stroke-width="3.8"/>
+    <path d="M 193 184 Q 200 181 207 184" fill="none" stroke="#1c1008" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M 149 183 Q 136 179 124 177" stroke="#1c1008" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+    <path d="M 251 183 Q 264 179 276 177" stroke="#1c1008" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+    <!-- Lens glare -->
+    <path d="M 157 175 Q 163 173 169 175" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M 215 175 Q 221 173 227 175" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- Mouth -->
+    <path d="M 181 241 Q 200 251 219 241" fill="none" stroke="#7a3e20" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+</svg>

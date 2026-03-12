@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path":     "/api/agent/run",
+      "schedule": "0 8 * * *"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_GA_ID": "G-KJG6E7PGJR"
+  }
+}

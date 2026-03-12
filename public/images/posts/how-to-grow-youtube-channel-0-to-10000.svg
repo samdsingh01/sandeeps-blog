@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a5f"/>
+      <stop offset="50%" style="stop-color:#1d4ed8"/>
+      <stop offset="100%" style="stop-color:#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.15)"/>
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0.05)"/>
+    </linearGradient>
+    <linearGradient id="greenLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4ade80"/>
+      <stop offset="100%" style="stop-color:#22d3ee"/>
+    </linearGradient>
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="50"/>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="250" cy="150" r="280" fill="rgba(255,255,255,0.06)" filter="url(#blur)"/>
+  <circle cx="1050" cy="500" r="240" fill="rgba(0,0,0,0.15)" filter="url(#blur)"/>
+
+  <!-- Diagonal lines pattern -->
+  <pattern id="lines" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="40" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#lines)"/>
+
+  <!-- Main card -->
+  <rect x="80" y="80" width="680" height="470" rx="24" fill="url(#card)" stroke="rgba(255,255,255,0.2)" stroke-width="1" filter="url(#shadow)"/>
+
+  <!-- Category badge -->
+  <rect x="112" y="112" width="195" height="36" rx="18" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <text x="209" y="135" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="white" text-anchor="middle">📈 Creator Growth</text>
+
+  <!-- Milestone badges -->
+  <rect x="112" y="170" width="90" height="38" rx="8" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="157" y="185" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">Start</text>
+  <text x="157" y="201" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="white" text-anchor="middle">0 subs</text>
+
+  <text x="225" y="193" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="rgba(255,255,255,0.5)" text-anchor="middle">→</text>
+
+  <rect x="250" y="170" width="100" height="38" rx="8" fill="rgba(74,222,128,0.15)" stroke="rgba(74,222,128,0.3)" stroke-width="1"/>
+  <text x="300" y="185" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(74,222,128,0.9)" text-anchor="middle">Goal</text>
+  <text x="300" y="201" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="#4ade80" text-anchor="middle">10K subs</text>
+
+  <!-- Title -->
+  <text x="112" y="265" font-family="system-ui, -apple-system, sans-serif" font-size="35" font-weight="800" fill="white" letter-spacing="-0.5">How to Grow Your</text>
+  <text x="112" y="310" font-family="system-ui, -apple-system, sans-serif" font-size="35" font-weight="800" fill="white" letter-spacing="-0.5">YouTube Channel</text>
+  <text x="112" y="355" font-family="system-ui, -apple-system, sans-serif" font-size="35" font-weight="800" fill="#4ade80" letter-spacing="-0.5">from 0 to 10,000</text>
+
+  <rect x="112" y="372" width="60" height="4" rx="2" fill="url(#greenLine)"/>
+
+  <text x="112" y="410" font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="rgba(255,255,255,0.85)">The exact content system creators use</text>
+  <text x="112" y="435" font-family="system-ui, -apple-system, sans-serif" font-size="17" fill="rgba(255,255,255,0.85)">to hit their first 10K subscribers</text>
+
+  <!-- Author -->
+  <circle cx="130" cy="497" r="18" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+  <text x="130" y="503" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="white" text-anchor="middle">S</text>
+  <text x="158" y="494" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="white">Sandeep Singh</text>
+  <text x="158" y="512" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.7)">Co-founder, Graphy.com</text>
+
+  <!-- Right side - growth graph -->
+  <rect x="830" y="120" width="300" height="200" rx="16" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+
+  <!-- Subscriber growth line -->
+  <text x="980" y="145" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" fill="rgba(255,255,255,0.7)" text-anchor="middle">Subscriber Growth</text>
+
+  <!-- Axes -->
+  <line x1="855" y1="295" x2="1115" y2="295" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+  <line x1="855" y1="160" x2="855" y2="295" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+
+  <!-- Y labels -->
+  <text x="848" y="298" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="end">0</text>
+  <text x="848" y="263" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="end">2K</text>
+  <text x="848" y="228" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="end">5K</text>
+  <text x="848" y="193" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="end">8K</text>
+  <text x="848" y="165" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="end">10K</text>
+
+  <!-- Area fill under curve -->
+  <path d="M 860 295 Q 900 285, 920 270 Q 950 250, 970 230 Q 1000 200, 1020 185 Q 1060 165, 1100 158 L 1100 295 Z" fill="rgba(74,222,128,0.1)"/>
+
+  <!-- Growth curve -->
+  <path d="M 860 295 Q 900 285, 920 270 Q 950 250, 970 230 Q 1000 200, 1020 185 Q 1060 165, 1100 158" fill="none" stroke="url(#greenLine)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Milestone dot -->
+  <circle cx="1100" cy="158" r="6" fill="#4ade80" stroke="white" stroke-width="2"/>
+  <text x="1105" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#4ade80" font-weight="700">10K! 🎉</text>
+
+  <!-- Phase labels -->
+  <text x="880" y="315" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">Month 1</text>
+  <text x="980" y="315" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">Month 3</text>
+  <text x="1080" y="315" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">Month 6</text>
+
+  <!-- Stats -->
+  <rect x="830" y="350" width="135" height="100" rx="16" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <text x="897" y="387" font-family="system-ui, -apple-system, sans-serif" font-size="26" font-weight="800" fill="white" text-anchor="middle">6 mo</text>
+  <text x="897" y="408" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.6)" text-anchor="middle">Average time</text>
+  <text x="897" y="426" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="middle">to first 10K</text>
+
+  <rect x="995" y="350" width="135" height="100" rx="16" fill="rgba(74,222,128,0.12)" stroke="rgba(74,222,128,0.25)" stroke-width="1"/>
+  <text x="1062" y="387" font-family="system-ui, -apple-system, sans-serif" font-size="26" font-weight="800" fill="#4ade80" text-anchor="middle">3/wk</text>
+  <text x="1062" y="408" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.6)" text-anchor="middle">Upload cadence</text>
+  <text x="1062" y="426" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="middle">recommended</text>
+
+  <!-- Graphy branding -->
+  <rect x="830" y="475" width="300" height="50" rx="12" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+  <text x="980" y="506" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="rgba(255,255,255,0.75)" text-anchor="middle">🚀 creatorlaunchpad.graphy.com</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="605" width="1200" height="25" fill="rgba(0,0,0,0.35)"/>
+  <text x="600" y="622" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="rgba(255,255,255,0.45)" text-anchor="middle">Creator Launchpad by Graphy.com · Your YouTube Growth Roadmap</text>
+</svg>
