@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 // Created on first use (not at module load) so build-time bundling never throws
 let _publicClient: ReturnType<typeof createClient> | null = null;
 
-export const supabase = new Proxy(
+export const supabase: ReturnType<typeof createClient> = new Proxy(
   {} as ReturnType<typeof createClient>,
   {
     get(_: unknown, prop: string) {
