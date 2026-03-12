@@ -6,7 +6,14 @@
 
 import { getServiceClient } from '../lib/supabase';
 
-export type RunType = 'content_generation' | 'keyword_research' | 'seo_check' | 'health_check';
+export type RunType =
+  | 'content_generation'
+  | 'keyword_research'
+  | 'content_refresh'
+  | 'ctr_optimization'
+  | 'internal_linking'
+  | 'seo_check'
+  | 'health_check';
 export type RunStatus = 'success' | 'error' | 'skipped';
 
 export async function logRun(params: {

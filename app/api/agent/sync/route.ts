@@ -15,6 +15,7 @@
 
 import { fetchPagePerformance } from '@/agent/gsc';
 import { storePagePerformance, getFeedbackInsights, boostKeywordsFromFeedback } from '@/agent/feedback';
+import { runCTROptimizer } from '@/agent/ctr';
 
 export const dynamic    = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,20 +38,24 @@ export async function POST(req: Request) {
     await storePagePerformance(pages);
 
     // 3. Analyse performance and boost keyword priorities
-    const insights      = await getFeedbackInsights();
-    const boostedCount  = await boostKeywordsFromFeedback(insights);
+    const insights     = await getFeedbackInsights();
+    const boostedCount = await boostKeywordsFromFeedback(insights);
+
+    // 4. Run CTR optimizer on quick win posts
+    const ctrResults = await runCTROptimizer();
 
     console.log('[Sync] ✅ Complete');
 
     return Response.json({
-      success:       true,
-      pagesSynced:   pages.length,
-      hasGSCData:    insights.hasData,
-      topPerformers: insights.topPerformers.length,
-      quickWins:     insights.quickWins.length,
+      success:         true,
+      pagesSynced:     pages.length,
+      hasGSCData:      insights.hasData,
+      topPerformers:   insights.topPerformers.length,
+      quickWins:       insights.quickWins.length,
       underperformers: insights.underperformers.length,
       keywordsBoosted: boostedCount,
-      hotCategories: insights.hotCategories,
+      ctrOptimized:    ctrResults.length,
+      hotCategories:   insights.hotCategories,
     });
 
   } catch (err) {

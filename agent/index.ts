@@ -12,6 +12,7 @@
  *   5. Fetch cover image
  *   6. Write to Supabase (with FAQs for AEO)
  *   7. Mark keyword as used
+ *   8. Run internal linking (new post ↔ existing posts)
  */
 
 import { getServiceClient }                                                      from '../lib/supabase';
@@ -20,6 +21,7 @@ import { classifyCategory, generatePost, renderMarkdown, calcReadingTime, slugif
 import { fetchCoverImage }                                                       from './images';
 import { logRun }                                                                from './logger';
 import { getFeedbackInsights }                                                   from './feedback';
+import { runInternalLinking }                                                    from './links';
 
 export interface AgentRunResult {
   success:    boolean;
@@ -107,6 +109,11 @@ export async function runAgent(): Promise<AgentRunResult> {
 
     // ── 8. Mark keyword as used ────────────────────────────────────────────
     await markKeywordUsed(topic);
+
+    // ── 9. Internal linking — runs async, doesn't block or fail the publish ─
+    runInternalLinking(slug).catch((err) =>
+      console.error('[Agent] Internal linking error (non-fatal):', err)
+    );
 
     const durationMs = Date.now() - startTime;
     console.log(`[Agent] ✅ Published "${title}" (${slug}) in ${durationMs}ms`);
