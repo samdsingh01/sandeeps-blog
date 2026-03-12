@@ -14,6 +14,9 @@ import { runAgent, runKeywordResearch } from '../../../../agent/index';
 // Tell Vercel this route can run for up to 5 minutes (agent needs time)
 export const maxDuration = 300;
 
+// Force dynamic — prevents Next.js from statically rendering this at build time
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   // ── Auth check ────────────────────────────────────────────────────────────
   const authHeader = request.headers.get('authorization');

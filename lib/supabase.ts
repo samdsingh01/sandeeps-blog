@@ -1,10 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
 // ── Public client (used by Next.js pages — read-only via RLS) ──────────────
-const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnon);
+export const supabase = supabaseUrl
+  ? createClient(supabaseUrl, supabaseAnon)
+  : null as any;
 
 // ── Service client (used by agent API route — full access) ─────────────────
 // Only available server-side; never exposed to the browser
