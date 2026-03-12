@@ -3,7 +3,7 @@ import BlogCard from "@/components/BlogCard";
 import { getAllPosts, getAllCategories } from "@/lib/posts";
 import Link from "next/link";
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: "All Articles — Sandeep's Blog",

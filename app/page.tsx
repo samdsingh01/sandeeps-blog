@@ -4,8 +4,8 @@ import AuthorBio from "@/components/AuthorBio";
 import { getAllPosts, getFeaturedPosts } from "@/lib/posts";
 import GraphyLink from "@/components/GraphyLink";
 
-// ISR — revalidate every 60 seconds so new posts appear within 1 minute
-export const revalidate = 60;
+// Dynamic — rendered on each request so Supabase is never called at build time
+export const dynamic = 'force-dynamic';
 
 const CATEGORIES = [
   { name: "YouTube Monetization", slug: "youtube-monetization", icon: "💰", desc: "Turn views into revenue" },
