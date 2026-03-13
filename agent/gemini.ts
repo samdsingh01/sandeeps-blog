@@ -56,8 +56,29 @@ export async function askFast(
  * Strip markdown code fences from JSON responses
  */
 export function stripJsonFences(text: string): string {
-  return text
+  // Strategy 1: strip simple ```json ... ``` fences
+  const fenceStripped = text
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/, '')
     .trim();
+
+  // If it looks like valid JSON already, return it
+  if (fenceStripped.startsWith('{') || fenceStripped.startsWith('[')) {
+    return fenceStripped;
+  }
+
+  // Strategy 2: extract the first complete JSON object from the text
+  // Handles cases where Gemini adds commentary before/after the JSON
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    return jsonMatch[0].trim();
+  }
+
+  // Strategy 3: find JSON inside a code fence anywhere in the text
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch) {
+    return fenceMatch[1].trim();
+  }
+
+  return fenceStripped;
 }

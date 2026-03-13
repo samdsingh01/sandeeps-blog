@@ -176,7 +176,7 @@ Return a JSON object with this exact structure:
 
 Return ONLY the JSON object. No preamble, no explanation, no markdown fences.`;
 
-  const raw     = await ask(prompt, 4096, 0.75);
+  const raw     = await ask(prompt, 8192, 0.75);
   const cleaned = stripJsonFences(raw);
 
   let parsed: {
