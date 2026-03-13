@@ -65,12 +65,14 @@ function buildQuery(topic: string, category: string): string {
 }
 
 function getCategoryFallback(category: string): string {
-  const fallbacks: Record<string, string> = {
-    'YouTube Monetization': '/images/posts/youtube-monetization.svg',
-    'Course Creation':       '/images/posts/course-creation.svg',
-    'Creator Growth':        '/images/posts/creator-growth.svg',
-    'Content Strategy':      '/images/posts/content-strategy.svg',
-    'AI for Creators':       '/images/posts/ai-creators.svg',
+  // Use picsum.photos with a consistent seed per category — free, no API key, always works
+  const seeds: Record<string, string> = {
+    'YouTube Monetization': '1081',   // tech/screen
+    'Course Creation':       '3184',  // learning/education
+    'Creator Growth':        '3184',  // analytics/growth
+    'Content Strategy':      '1181',  // planning/strategy
+    'AI for Creators':       '373',   // technology/AI
   };
-  return fallbacks[category] ?? '/images/default-cover.svg';
+  const seed = seeds[category] ?? '1';
+  return `https://picsum.photos/seed/${seed}/1200/630`;
 }
