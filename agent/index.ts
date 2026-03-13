@@ -160,7 +160,7 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
       faq:            faqs.length > 0 ? faqs : null,
       featured:       false,
       status:         publishStatus,
-      published_at:   publishStatus === 'published' ? new Date().toISOString() : null,
+      published_at:   new Date().toISOString(), // always set — column is NOT NULL
       // Store quality metadata for trending/analysis
       quality_score:  qualityReport.score,
     });
