@@ -2,13 +2,133 @@
  * agent/keywords.ts
  * =================
  * Researches and manages keyword opportunities.
- * Pipeline: Google Trends → Gemini (expand) → DataForSEO (real volume) → Supabase
+ * Pipeline: Google Suggest (free) → Google Trends → Gemini (expand) → DataForSEO (real volume) → Supabase
+ *
+ * Auto-refill: triggers research automatically when unused keywords drop below LOW_KEYWORD_THRESHOLD.
  */
 
 import { ask, askFast, stripJsonFences } from './gemini';
 import { getServiceClient }              from '../lib/supabase';
 import { getRelatedTrendingQueries }     from './trends';
 import { getKeywordMetrics }             from './dataforseo';
+
+const LOW_KEYWORD_THRESHOLD = 15; // auto-refill when unused keywords drop below this
+
+// ── Google Suggest (free autocomplete API — no key needed) ───────────────────
+
+/**
+ * Fetch Google autocomplete suggestions for a seed query.
+ * Uses Google's public suggest API — free, no auth, works immediately.
+ * Returns up to 10 suggestions per seed.
+ */
+async function fetchGoogleSuggestions(seed: string): Promise<string[]> {
+  try {
+    const url = `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(seed)}&hl=en`;
+    const res  = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    // Response shape: ["seed", ["suggestion1", "suggestion2", ...]]
+    const suggestions: string[] = data?.[1] ?? [];
+    return suggestions.filter((s) => s.length > 10 && s.length < 100);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Discover new keywords using Google Suggest across multiple seed variations.
+ * Generates question-style, comparison, and how-to variations of each seed.
+ * Returns deduplicated list of new keywords not already in the DB.
+ */
+export async function discoverFromSuggest(seeds?: string[]): Promise<string[]> {
+  const db        = getServiceClient();
+  const seedList  = seeds ?? NICHE_SEEDS;
+
+  // Generate search variations for each seed
+  const variations: string[] = [];
+  for (const seed of seedList.slice(0, 5)) {
+    variations.push(
+      seed,
+      `how to ${seed}`,
+      `best ${seed}`,
+      `${seed} for beginners`,
+      `${seed} 2025`,
+      `${seed} tips`,
+    );
+  }
+
+  // Fetch suggestions for all variations in parallel (batches of 5)
+  const allSuggestions: string[] = [];
+  for (let i = 0; i < variations.length; i += 5) {
+    const batch   = variations.slice(i, i + 5);
+    const results = await Promise.allSettled(batch.map(fetchGoogleSuggestions));
+    for (const r of results) {
+      if (r.status === 'fulfilled') allSuggestions.push(...r.value);
+    }
+    await new Promise((res) => setTimeout(res, 200)); // small delay
+  }
+
+  const unique = [...new Set(allSuggestions.map((s) => s.toLowerCase().trim()))];
+
+  // Filter out keywords already in DB
+  const { data: existing } = await db.from('keywords').select('keyword');
+  const existingSet = new Set((existing ?? []).map((r: { keyword: string }) => r.keyword.toLowerCase()));
+  const novel = unique.filter((k) => !existingSet.has(k));
+
+  console.log(`[Keywords/Suggest] Discovered ${novel.length} new keywords from Google Suggest`);
+  return novel;
+}
+
+/**
+ * Auto-refill the keyword pipeline when unused count drops below LOW_KEYWORD_THRESHOLD.
+ * Called at the start of each agent run. Non-blocking.
+ */
+export async function autoRefillIfLow(): Promise<void> {
+  const db = getServiceClient();
+  const { count } = await db
+    .from('keywords')
+    .select('*', { count: 'exact', head: true })
+    .eq('used', false);
+
+  const unused = count ?? 0;
+  if (unused >= LOW_KEYWORD_THRESHOLD) return;
+
+  console.log(`[Keywords] ⚠️ Only ${unused} unused keywords — auto-refilling...`);
+
+  try {
+    // Step 1: Free Google Suggest discovery (instant, no API cost)
+    const suggested = await discoverFromSuggest();
+    if (suggested.length > 0) {
+      const rows = suggested.slice(0, 30).map((keyword) => ({
+        keyword,
+        search_volume: 'estimated',
+        difficulty:    'unknown',
+        priority:      5,
+        used:          false,
+      }));
+      const { error } = await db
+        .from('keywords')
+        .upsert(rows, { onConflict: 'keyword', ignoreDuplicates: true });
+      if (!error) console.log(`[Keywords] ✅ Added ${rows.length} keywords from Google Suggest`);
+    }
+
+    // Step 2: Also run full research pipeline if still very low
+    const { count: newCount } = await db
+      .from('keywords')
+      .select('*', { count: 'exact', head: true })
+      .eq('used', false);
+    if ((newCount ?? 0) < 10) {
+      console.log('[Keywords] Still low — running full research pipeline...');
+      const seed = NICHE_SEEDS[Math.floor(Math.random() * NICHE_SEEDS.length)];
+      await researchKeywords(seed, 15).catch((e) => console.warn('[Keywords] Research pipeline error:', e));
+    }
+  } catch (err) {
+    console.warn('[Keywords] Auto-refill error (non-fatal):', err);
+  }
+}
 
 interface KeywordResult {
   keyword:       string;

@@ -18,7 +18,7 @@
  */
 
 import { getServiceClient }                                                      from '../lib/supabase';
-import { pickTodaysTopic, markKeywordUsed }                                      from './keywords';
+import { pickTodaysTopic, markKeywordUsed, autoRefillIfLow }                    from './keywords';
 import { classifyCategory, generatePost, renderMarkdown, calcReadingTime, slugify } from './content';
 import { fetchCoverImage }                                                       from './images';
 import { logRun }                                                                from './logger';
@@ -26,6 +26,7 @@ import { getFeedbackInsights }                                                  
 import { runInternalLinking }                                                    from './links';
 import { generateDistributionDrafts }                                            from './distribute';
 import { checkContentQuality, summariseQualityReport, QualityReport }           from './quality';
+import { generateTitleVariant }                                                  from './abtitle';
 
 export interface AgentRunResult {
   success:       boolean;
@@ -48,7 +49,10 @@ export async function runAgent(): Promise<AgentRunResult> {
   const db = getServiceClient();
 
   try {
-    // ── 0. Load performance feedback (silently skipped if GSC not set up) ──
+    // ── 0a. Auto-refill keywords if running low (non-blocking) ───────────────
+    autoRefillIfLow().catch((e) => console.warn('[Agent] Auto-refill error (non-fatal):', e));
+
+    // ── 0b. Load performance feedback (silently skipped if GSC not set up) ──
     console.log('[Agent] Loading performance insights...');
     const insights = await getFeedbackInsights().catch(() => null);
     if (insights?.hasData) {
@@ -175,6 +179,20 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
       // ── 11. Distribution drafts (async, non-blocking) ──────────────────
       generateDistributionDrafts(slug).catch((err) =>
         console.error('[Agent] Distribution drafts error (non-fatal):', err)
+      );
+
+      // ── 12. A/B title variant (async, non-blocking) ─────────────────────
+      // Generates a second title to test against the original after 7 days
+      generateTitleVariant(title, topic, category).then(async (titleB) => {
+        if (!titleB || titleB === title) return;
+        const db2 = getServiceClient();
+        await db2.from('posts').update({
+          title_b:               titleB,
+          title_test_started_at: new Date().toISOString(),
+        }).eq('slug', slug);
+        console.log(`[Agent] 🧪 A/B test started — variant: "${titleB}"`);
+      }).catch((err) =>
+        console.error('[Agent] A/B title variant error (non-fatal):', err)
       );
     }
 

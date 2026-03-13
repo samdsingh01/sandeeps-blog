@@ -235,3 +235,49 @@ export async function fetchTopQueries(days = 28, limit = 25): Promise<GSCQueryDa
     position:    r.position,
   }));
 }
+
+/**
+ * Get the average CTR for a specific page slug over the last N days.
+ * Returns null if no GSC data is available yet.
+ * Used by A/B title testing to evaluate title performance.
+ */
+export async function getPageCTR(slug: string, days = 7): Promise<number | null> {
+  try {
+    const token = await getAccessToken();
+    const site  = process.env.GSC_SITE_URL ?? 'https://sandeeps.co';
+
+    const end   = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - days);
+
+    const pageUrl = `${site.replace(/\/$/, '')}/blog/${slug}`;
+
+    const res = await fetch(
+      `${GSC_API}/${encodeURIComponent(site)}/searchAnalytics/query`,
+      {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate:            formatDate(start),
+          endDate:              formatDate(end),
+          dimensions:           ['page'],
+          dimensionFilterGroups: [{
+            filters: [{ dimension: 'page', operator: 'equals', expression: pageUrl }],
+          }],
+          rowLimit: 1,
+          dataState: 'final',
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const row  = data.rows?.[0];
+    if (!row || row.impressions < 10) return null; // not enough data
+
+    return row.ctr as number;
+  } catch {
+    return null;
+  }
+}

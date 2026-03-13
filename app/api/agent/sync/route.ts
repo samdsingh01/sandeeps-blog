@@ -16,6 +16,7 @@
 import { fetchPagePerformance } from '@/agent/gsc';
 import { storePagePerformance, getFeedbackInsights, boostKeywordsFromFeedback } from '@/agent/feedback';
 import { runCTROptimizer } from '@/agent/ctr';
+import { runABTitleTests } from '@/agent/abtitle';
 
 export const dynamic    = 'force-dynamic';
 export const maxDuration = 60;
@@ -44,6 +45,14 @@ export async function POST(req: Request) {
     // 4. Run CTR optimizer on quick win posts
     const ctrResults = await runCTROptimizer();
 
+    // 5. Evaluate A/B title tests (check results, swap if needed, pick winners)
+    const abResults = await runABTitleTests().catch((e) => {
+      console.warn('[Sync] A/B title test error (non-fatal):', e);
+      return [];
+    });
+    const abSwaps   = abResults.filter((r) => r.action === 'swapped_to_b').length;
+    const abWinners = abResults.filter((r) => r.winner).length;
+
     console.log('[Sync] ✅ Complete');
 
     return Response.json({
@@ -55,6 +64,7 @@ export async function POST(req: Request) {
       underperformers: insights.underperformers.length,
       keywordsBoosted: boostedCount,
       ctrOptimized:    ctrResults.length,
+      abTitleTests:    { checked: abResults.length, swapped: abSwaps, winnersDecided: abWinners },
       hotCategories:   insights.hotCategories,
     });
 
