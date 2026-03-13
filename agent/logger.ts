@@ -13,7 +13,8 @@ export type RunType =
   | 'ctr_optimization'
   | 'internal_linking'
   | 'seo_check'
-  | 'health_check';
+  | 'health_check'
+  | 'self_heal';
 export type RunStatus = 'success' | 'error' | 'skipped';
 
 export async function logRun(params: {

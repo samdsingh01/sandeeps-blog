@@ -27,6 +27,7 @@ import { runInternalLinking }                                                   
 import { generateDistributionDrafts }                                            from './distribute';
 import { checkContentQuality, summariseQualityReport, QualityReport }           from './quality';
 import { generateTitleVariant }                                                  from './abtitle';
+import { healPost }                                                              from './selfheal';
 
 export interface AgentRunResult {
   success:       boolean;
@@ -175,13 +176,19 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
     // ── 9. Mark keyword as used ────────────────────────────────────────────
     await markKeywordUsed(topic);
 
-    // ── 10. Internal linking (async, non-blocking) — only for published posts
+    // ── 10. Self-heal — verify and fix the post immediately after publish ──
+    // Runs for ALL posts (published + draft) to fix content/image/meta issues
+    healPost(slug).then((r) => {
+      if (r.healed > 0) console.log(`[Agent] 🔧 Self-heal fixed ${r.healed} issues on "${slug}"`);
+    }).catch((err) => console.error('[Agent] Self-heal error (non-fatal):', err));
+
+    // ── 11. Internal linking + distribution (published only) ───────────────
     if (publishStatus === 'published') {
       runInternalLinking(slug).catch((err) =>
         console.error('[Agent] Internal linking error (non-fatal):', err)
       );
 
-      // ── 11. Distribution drafts (async, non-blocking) ──────────────────
+      // ── 12. Distribution drafts (async, non-blocking) ──────────────────
       generateDistributionDrafts(slug).catch((err) =>
         console.error('[Agent] Distribution drafts error (non-fatal):', err)
       );
