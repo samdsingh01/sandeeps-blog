@@ -18,7 +18,7 @@ function getClient(): GoogleGenerativeAI {
   return _client;
 }
 
-const CONTENT_MODEL = 'gemini-2.0-flash';
+const CONTENT_MODEL = 'gemini-2.0-flash-lite';
 
 /**
  * Heavy generation: blog posts, long-form content
