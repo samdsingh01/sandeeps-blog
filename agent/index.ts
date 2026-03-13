@@ -171,7 +171,20 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
       quality_score:  qualityReport.score,
     });
 
-    if (insertError) throw new Error(`DB insert failed: ${insertError.message}`);
+    // Retry once with a unique slug if duplicate key
+    if (insertError?.code === '23505') {
+      slug = `${slug}-${Date.now()}`;
+      const { error: retryError } = await db.from('posts').insert({
+        slug, title, description, content: markdown, content_html: contentHtml,
+        category, tags, author: 'Sandeep Singh', author_role: 'Co-founder, Graphy.com',
+        cover_image: coverImage, seo_keywords: seoKeywords, reading_time: readingTime,
+        faq: faqs.length > 0 ? faqs : null, featured: false, status: publishStatus,
+        published_at: new Date().toISOString(), quality_score: qualityReport.score,
+      });
+      if (retryError) throw new Error(`DB insert failed: ${retryError.message}`);
+    } else if (insertError) {
+      throw new Error(`DB insert failed: ${insertError.message}`);
+    }
 
     // ── 9. Mark keyword as used ────────────────────────────────────────────
     await markKeywordUsed(topic);
