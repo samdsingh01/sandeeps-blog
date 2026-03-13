@@ -4,8 +4,12 @@ const nextConfig = {
   images: {
     // Allow Vercel's built-in image optimizer (best performance on Vercel)
     unoptimized: false,
-    // If you ever embed external images, add their domains here:
-    // remotePatterns: [{ protocol: 'https', hostname: 'images.unsplash.com' }],
+    // External image sources used by the agent for cover images
+    remotePatterns: [
+      { protocol: 'https', hostname: 'picsum.photos' },         // free fallback covers
+      { protocol: 'https', hostname: 'fastly.picsum.photos' },  // picsum CDN alias
+      { protocol: 'https', hostname: 'images.unsplash.com' },   // Unsplash (when key is set)
+    ],
   },
 
   // Security headers — automatically added to every response
@@ -23,6 +27,19 @@ const nextConfig = {
             value: 'camera=(), microphone=(), geolocation=()',
           },
         ],
+      },
+      // Blog listing pages — never cache so new agent posts appear immediately
+      {
+        source: '/',
+        headers: [{ key: 'Cache-Control', value: 'no-store, must-revalidate' }],
+      },
+      {
+        source: '/blog',
+        headers: [{ key: 'Cache-Control', value: 'no-store, must-revalidate' }],
+      },
+      {
+        source: '/categories/:path*',
+        headers: [{ key: 'Cache-Control', value: 'no-store, must-revalidate' }],
       },
     ];
   },
