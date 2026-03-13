@@ -79,6 +79,11 @@ export async function runAgent(): Promise<AgentRunResult> {
     // ── 4. Generate post — pass insights so Gemini writes smarter content ──
     let generated = await generatePost(topic, category, insights ?? undefined);
     let { title, description, slug: rawSlug, tags, seoKeywords, faqs, markdown } = generated;
+
+    // If title is just the raw keyword (JSON parse fallback), format it properly
+    if (title === topic || title === topic.toLowerCase()) {
+      title = topic.replace(/\b\w/g, (c) => c.toUpperCase()); // Title Case
+    }
     console.log(`[Agent] Generated: "${title}" (${faqs.length} FAQs)`);
 
     // ── 5. QUALITY GATE — check E-E-A-T, word count, spam signals ────────
