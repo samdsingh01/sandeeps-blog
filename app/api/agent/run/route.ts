@@ -18,11 +18,17 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
-  // ── Auth check ────────────────────────────────────────────────────────────
+  // ── Auth check — accepts Bearer header OR ?key= query param ──────────────
   const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
+  const keyParam   = new URL(request.url).searchParams.get('key');
+  const cronSecret = process.env.CRON_SECRET?.trim(); // trim whitespace/newlines
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const isAuthorised =
+    !cronSecret ||                                  // no secret set → open
+    authHeader === `Bearer ${cronSecret}` ||        // header auth
+    keyParam    === cronSecret;                     // query param auth
+
+  if (!isAuthorised) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
