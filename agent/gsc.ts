@@ -243,8 +243,10 @@ export async function fetchTopQueries(days = 28, limit = 25): Promise<GSCQueryDa
  */
 export async function getPageCTR(slug: string, days = 7): Promise<number | null> {
   try {
-    const token = await getAccessToken();
-    const site  = process.env.GSC_SITE_URL ?? 'https://sandeeps.co';
+    const sa = getServiceAccount();
+    if (!sa) return null;
+    const token = await getAccessToken(sa);
+    const site  = getSiteUrl();
 
     const end   = new Date();
     const start = new Date(end);
