@@ -44,6 +44,7 @@ export interface QualityReport {
   hasProperStructure:   boolean;        // H2s, intro, conclusion
   hasFAQSection:        boolean;
   hasOriginalAngle:     boolean;        // contrarian take, unique insight
+  hasVisualRichness:    boolean;        // tables + callout boxes present
   eeatScore:            number;         // 0–40 sub-score
   readabilityScore:     number;         // 0–20 sub-score
   spamScore:            number;         // 0 = clean, >5 = flagged
@@ -235,7 +236,22 @@ export function checkContentQuality(
     score -= 5;
   }
 
-  // ── 9. Title quality ─────────────────────────────────────────────────────────
+  // ── 9. Visual richness check ─────────────────────────────────────────────────
+  const hasTable        = markdown.includes('|---') || markdown.includes('| ---');
+  const hasCalloutBox   = markdown.includes('class="stat-box"') || markdown.includes('class="tip-box"') || markdown.includes('class="callout-box"');
+  const hasWarningBox   = markdown.includes('class="warning-box"');
+  const hasVisualRichness = hasTable && (hasCalloutBox || hasWarningBox);
+
+  if (!hasTable) {
+    issues.push({ type: 'warning', code: 'NO_TABLES', message: 'No markdown tables found. Add at least one comparison table — tables significantly improve engagement and time-on-page.', impact: 8 });
+    score -= 8;
+  }
+  if (!hasCalloutBox && !hasWarningBox) {
+    warnings.push('No callout boxes (stat-box, tip-box, warning-box). Add visual callouts to break up text and highlight key insights.');
+    score -= 5;
+  }
+
+  // ── 10. Title quality ─────────────────────────────────────────────────────────
   if (title.length > 65) {
     warnings.push(`Title is ${title.length} chars (ideal: 50-60). May get truncated in SERPs.`);
     score -= 3;
@@ -273,6 +289,7 @@ export function checkContentQuality(
     hasProperStructure,
     hasFAQSection,
     hasOriginalAngle,
+    hasVisualRichness,
     eeatScore,
     readabilityScore,
     spamScore,

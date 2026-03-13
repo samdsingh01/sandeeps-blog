@@ -89,6 +89,30 @@ E-E-A-T REQUIREMENTS:
 - One step-by-step numbered action section
 - Blockquote Pro Tip per major section
 
+VISUAL RICHNESS REQUIREMENTS (mandatory — makes posts scannable and engaging):
+1. TABLES: Include at least 2 markdown comparison tables. Examples:
+   | Platform | Revenue Share | Min Payout | Best For |
+   |----------|--------------|------------|----------|
+   | YouTube  | 55%          | $100       | Long-form |
+
+2. STAT CALLOUTS: Wrap key stats in this HTML (use 2–3 times):
+   <div class="stat-box">📊 Channels with consistent uploads earn <strong>3x more AdSense</strong> than irregular ones — YouTube Creator Academy, 2025</div>
+
+3. TIP BOXES: Use for standout Pro Tips (use 2–3 times):
+   <div class="tip-box">💡 <strong>Pro Tip:</strong> Your actionable tip here.</div>
+
+4. WARNING BOXES: Use once for the biggest mistake to avoid:
+   <div class="warning-box">⚠️ <strong>Watch out:</strong> Warning text here.</div>
+
+5. CALLOUT BOXES: Use once for a key mid-article insight:
+   <div class="callout-box">🎯 <strong>Key Insight:</strong> Insight text here.</div>
+
+READABILITY RULES:
+- Max 3 sentences per paragraph — no walls of text
+- Use **bold** for key terms, numbers, and action words
+- Every H2 section needs at least one visual element (table, box, or list)
+- Target 1,200–1,500 words — tight and punchy beats long and fluffy
+
 TONE: Direct, like texting a smart friend. Short sentences. "You" not "one".
 GRAPHY: Max 2 natural mentions as a solution, not an ad.`;
 
@@ -147,16 +171,17 @@ ${queryHints}
 ${contentRules}
 
 STRUCTURE (required):
-1. Opening hook — specific problem or surprising stat (no generic intro)
-2. At least 5 ## H2 sections with 200+ words each
-3. "## What Most Creators Get Wrong About [specific aspect]" section
-4. "## Sandeep's Take" — short direct personal opinion
-5. Numbered step-by-step action section
-6. "> **Pro Tip:**" blockquote in each major section
-7. "## Key Takeaways" bullet list near end
-8. "## Frequently Asked Questions" at the very end with 5 Q&A pairs
+1. Opening hook — one punchy paragraph with a surprising stat or bold claim
+2. At least 5 ## H2 sections — each with a table OR stat-box OR tip-box
+3. One markdown comparison table in the first 2 sections
+4. "## What Most Creators Get Wrong About [specific aspect]" — include a warning-box
+5. "## Sandeep's Take" — 2–3 short paragraphs, direct opinion, no fluff
+6. One numbered step-by-step action section (use 1. 2. 3. format)
+7. One second comparison or data table anywhere in the post
+8. "## Key Takeaways" — 5 tight bullet points
+9. "## Frequently Asked Questions" — 5 Q&A pairs at the very end
 
-LENGTH: 1,600–2,200 words minimum.
+LENGTH: 1,200–1,500 words. Every sentence must add value.
 
 Write the full markdown post now. Start directly with the opening paragraph — no title heading needed.`;
 
