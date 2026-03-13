@@ -62,7 +62,7 @@ export default function BlogCard({ post, featured = false }: BlogCardProps) {
 
   if (featured) {
     return (
-      <article className="group relative flex flex-col lg:flex-row gap-0 bg-white border border-brand-100 rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300">
+      <Link href={`/blog/${post.slug}`} className="group relative flex flex-col lg:flex-row gap-0 bg-white border border-brand-100 rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer">
         {/* Cover image */}
         <div className="lg:w-2/5 h-56 lg:h-auto relative overflow-hidden flex-shrink-0">
           <CoverImage src={post.coverImage} alt={alt} category={post.category} className="transition-transform duration-500 group-hover:scale-105" />
@@ -80,7 +80,7 @@ export default function BlogCard({ post, featured = false }: BlogCardProps) {
             <span className="text-xs text-gray-400">{post.readingTime}</span>
           </div>
           <h2 className="text-xl lg:text-2xl font-bold text-gray-900 mb-3 group-hover:text-brand-600 transition-colors line-clamp-3">
-            <Link href={`/blog/${post.slug}`}>{post.title}</Link>
+            {post.title}
           </h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-5 line-clamp-3">{post.description}</p>
           <div className="flex items-center justify-between">
@@ -93,20 +93,17 @@ export default function BlogCard({ post, featured = false }: BlogCardProps) {
                 <p className="text-xs text-gray-400">{post.authorRole}</p>
               </div>
             </div>
-            <Link
-              href={`/blog/${post.slug}`}
-              className="text-brand-600 hover:text-brand-700 text-sm font-semibold"
-            >
+            <span className="text-brand-600 group-hover:text-brand-700 text-sm font-semibold">
               Read more →
-            </Link>
+            </span>
           </div>
         </div>
-      </article>
+      </Link>
     );
   }
 
   return (
-    <article className="group flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+    <Link href={`/blog/${post.slug}`} className="group flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
       {/* Cover image */}
       <div className="h-44 relative overflow-hidden flex-shrink-0">
         <CoverImage src={post.coverImage} alt={alt} category={post.category} className="transition-transform duration-500 group-hover:scale-105" />
@@ -124,7 +121,7 @@ export default function BlogCard({ post, featured = false }: BlogCardProps) {
           <span className="text-xs text-gray-400">{post.readingTime}</span>
         </div>
         <h2 className="font-bold text-gray-900 text-base mb-2 group-hover:text-brand-600 transition-colors line-clamp-2">
-          <Link href={`/blog/${post.slug}`}>{post.title}</Link>
+          {post.title}
         </h2>
         <p className="text-sm text-gray-600 leading-relaxed mb-4 line-clamp-3 flex-1">
           {post.description}
@@ -140,11 +137,11 @@ export default function BlogCard({ post, featured = false }: BlogCardProps) {
               month: 'short', day: 'numeric', year: 'numeric',
             })}
           </span>
-          <Link href={`/blog/${post.slug}`} className="text-sm font-semibold text-brand-600 hover:text-brand-700">
+          <span className="text-sm font-semibold text-brand-600 group-hover:text-brand-700">
             Read →
-          </Link>
+          </span>
         </div>
       </div>
-    </article>
+    </Link>
   );
 }

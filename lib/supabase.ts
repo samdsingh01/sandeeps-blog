@@ -13,7 +13,15 @@ export function getPublicClient(): SupabaseClient {
     if (!url || !anon) {
       throw new Error(`Supabase env vars missing. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel.`);
     }
-    _publicClient = createClient(url, anon);
+    // Pass cache: 'no-store' to every fetch so Next.js never caches Supabase responses.
+    // Without this, Next.js's extended fetch can cache DB results across requests
+    // even when the page uses force-dynamic, causing stale post listings.
+    _publicClient = createClient(url, anon, {
+      global: {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          fetch(input, { ...init, cache: 'no-store' }),
+      },
+    });
   }
   return _publicClient;
 }

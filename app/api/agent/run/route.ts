@@ -59,11 +59,38 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Allow GET for quick health check (no auth needed)
-export async function GET() {
-  return NextResponse.json({
-    status: 'ok',
-    message: 'Agent endpoint is live. POST to trigger a run.',
-    schedule: '08:00 UTC daily',
-  });
+// GET handler — used by Vercel Cron (crons always send GET, not POST).
+// Applies the same auth check and runs the full agent.
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  const keyParam   = new URL(request.url).searchParams.get('key');
+  const cronSecret = process.env.CRON_SECRET?.trim();
+
+  const isAuthorised =
+    !cronSecret ||
+    authHeader === `Bearer ${cronSecret}` ||
+    keyParam    === cronSecret;
+
+  // No-auth quick health check (no key provided at all)
+  if (!isAuthorised && !authHeader && !keyParam) {
+    return NextResponse.json({
+      status:   'ok',
+      message:  'Agent endpoint is live. GET with auth or POST to trigger a run.',
+      schedule: '08:00 UTC daily',
+    });
+  }
+
+  if (!isAuthorised) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  console.log('[Cron] Starting agent run via GET (Vercel Cron)');
+  try {
+    const result = await runAgent();
+    return NextResponse.json(result);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error('[Cron] Unhandled error:', error);
+    return NextResponse.json({ success: false, error }, { status: 500 });
+  }
 }
