@@ -53,6 +53,40 @@ export async function askFast(
 }
 
 /**
+ * Generate a detailed, visual image prompt for blog cover art.
+ * Used by images.ts to create topic-relevant AI-generated covers.
+ */
+export async function generateImagePrompt(
+  topic: string,
+  category: string,
+): Promise<string> {
+  const categoryStyle: Record<string, string> = {
+    'YouTube Monetization': 'modern YouTube studio, camera equipment, bright ring light, creative workspace with screens showing analytics',
+    'Course Creation':       'clean desk with laptop, notebook, and coffee, online learning aesthetic, soft natural light',
+    'Creator Growth':        'rising chart, social media analytics dashboard, vibrant colors, digital growth visualization',
+    'Content Strategy':      'content planning board, sticky notes, calendar, strategic planning workspace',
+    'AI for Creators':       'glowing neural network, futuristic digital art workspace, AI holographic interface',
+  };
+
+  const style = categoryStyle[category] ?? 'modern digital creator workspace, laptop, clean minimal aesthetic';
+
+  const prompt = await askFast(
+    `You are a visual art director creating cover images for a creator economy blog.
+Write a single detailed image generation prompt (under 80 words) for a blog post titled: "${topic}"
+
+The image should be: ${style}
+Style: professional photography or 3D render, vibrant but clean, high-contrast, suitable as a wide blog header (16:9 ratio)
+No text in the image. No people's faces. Focus on objects, workspace, technology, and mood.
+
+Return ONLY the image prompt. No quotes, no preamble.`,
+    200,
+    0.8,
+  );
+
+  return prompt.trim().replace(/^["']|["']$/g, ''); // strip surrounding quotes if any
+}
+
+/**
  * Strip markdown code fences from JSON responses
  */
 export function stripJsonFences(text: string): string {
