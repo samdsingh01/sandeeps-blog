@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from 'next/cache';
 import { getPublicClient, DbPost, DbFAQItem } from './supabase';
 
 export type FAQItem = DbFAQItem;
@@ -48,6 +49,7 @@ function toPost(row: DbPost): Post {
 }
 
 export async function getAllPosts(): Promise<PostMeta[]> {
+  noStore(); // bypass Next.js data cache — always fetch live from Supabase
   const { data, error } = await getPublicClient()
     .from('posts').select('*').eq('status', 'published')
     .order('published_at', { ascending: false });
@@ -77,6 +79,7 @@ export async function getPostMeta(slug: string): Promise<PostMeta | null> {
 }
 
 export async function getFeaturedPosts(): Promise<PostMeta[]> {
+  noStore();
   const { data, error } = await getPublicClient()
     .from('posts').select('*').eq('status', 'published').eq('featured', true)
     .order('published_at', { ascending: false }).limit(3);
@@ -85,6 +88,7 @@ export async function getFeaturedPosts(): Promise<PostMeta[]> {
 }
 
 export async function getPostsByCategory(category: string): Promise<PostMeta[]> {
+  noStore();
   const { data, error } = await getPublicClient()
     .from('posts').select('*').eq('status', 'published').ilike('category', category)
     .order('published_at', { ascending: false });
@@ -93,6 +97,7 @@ export async function getPostsByCategory(category: string): Promise<PostMeta[]> 
 }
 
 export async function getAllCategories(): Promise<string[]> {
+  noStore();
   const { data, error } = await getPublicClient()
     .from('posts').select('category').eq('status', 'published');
   if (error) { console.error('getAllCategories:', error); return []; }
