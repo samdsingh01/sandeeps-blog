@@ -10,8 +10,10 @@
  *   3. Generate post — Gemini writes E-E-A-T compliant, spam-free content
  *   4. Quality gate — score post 0-100, regenerate if < 65, draft if still fails
  *   5. Render markdown → HTML
- *   6. Fetch cover image
- *   7. Write to Supabase (published or draft based on quality)
+ *   6. Generate images in parallel:
+ *      a. Cover image (Gemini → Supabase Storage)
+ *      b. 2 inline concept images for key sections (Gemini → Supabase Storage)
+ *   7. Inject concept images into HTML, write to Supabase
  *   8. Mark keyword as used
  *   9. Run internal linking (new post ↔ existing posts)
  *  10. Generate distribution drafts (Reddit + Twitter + LinkedIn)
@@ -20,7 +22,7 @@
 import { getServiceClient }                                                      from '../lib/supabase';
 import { pickTodaysTopic, markKeywordUsed, autoRefillIfLow }                    from './keywords';
 import { classifyCategory, generatePost, renderMarkdown, calcReadingTime, slugify } from './content';
-import { fetchCoverImage }                                                       from './images';
+import { fetchCoverImage, generateContentImages, injectContentImages }          from './images';
 import { logRun }                                                                from './logger';
 import { getFeedbackInsights }                                                   from './feedback';
 import { runInternalLinking }                                                    from './links';
@@ -146,8 +148,15 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
     const contentHtml = await renderMarkdown(markdown);
     const readingTime  = calcReadingTime(markdown);
 
-    // ── 7. Fetch cover image ───────────────────────────────────────────────
-    const coverImage = await fetchCoverImage(topic, category, slug);
+    // ── 7. Generate images in parallel (cover + inline concept images) ────────
+    const [coverImage, contentImages] = await Promise.all([
+      fetchCoverImage(topic, category, slug),
+      generateContentImages(markdown, topic, category, slug),
+    ]);
+
+    // Inject concept images into the rendered HTML
+    const enrichedHtml = injectContentImages(contentHtml, contentImages);
+    console.log(`[Agent] Generated ${contentImages.length} inline concept images for "${slug}"`);
 
     // ── 8. Write to Supabase ───────────────────────────────────────────────
     const { error: insertError } = await db.from('posts').insert({
@@ -155,7 +164,7 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
       title,
       description,
       content:        markdown,
-      content_html:   contentHtml,
+      content_html:   enrichedHtml,
       category,
       tags,
       author:         'Sandeep Singh',
@@ -175,7 +184,7 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
     if (insertError?.code === '23505') {
       slug = `${slug}-${Date.now()}`;
       const { error: retryError } = await db.from('posts').insert({
-        slug, title, description, content: markdown, content_html: contentHtml,
+        slug, title, description, content: markdown, content_html: enrichedHtml,
         category, tags, author: 'Sandeep Singh', author_role: 'Co-founder, Graphy.com',
         cover_image: coverImage, seo_keywords: seoKeywords, reading_time: readingTime,
         faq: faqs.length > 0 ? faqs : null, featured: false, status: publishStatus,
