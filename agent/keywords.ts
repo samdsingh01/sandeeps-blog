@@ -143,6 +143,30 @@ const NICHE_SEEDS = [
   'youtube channel growth',
   'sell online course',
   'content creator business',
+  // AI for Creator Economy seeds
+  'AI tools for content creators',
+  'ChatGPT for YouTube creators',
+  'AI course creation tools',
+  'AI video editing for YouTubers',
+  'AI for online business creators',
+];
+
+// AI Creator Economy specific seeds — used for targeted AI keyword seeding
+export const AI_CREATOR_SEEDS = [
+  'AI tools for YouTube creators',
+  'ChatGPT for content creators',
+  'AI for online course creation',
+  'AI video script generator',
+  'AI thumbnail generator for YouTube',
+  'Gemini for content marketing',
+  'ElevenLabs voice cloning for creators',
+  'AI tools to grow YouTube channel',
+  'Pictory AI video creation',
+  'Descript AI podcast editing',
+  'AI for email marketing creators',
+  'AI sales funnel for course creators',
+  'automate content creation with AI',
+  'AI for creator economy 2026',
 ];
 
 /**

@@ -104,8 +104,13 @@ export async function getFeaturedPosts(): Promise<PostMeta[]> {
 
 export async function getPostsByCategory(category: string): Promise<PostMeta[]> {
   noStore();
+  // Use partial ilike match for the AI category to capture both:
+  //   "AI for Creators" (old posts) and "AI for Creator Economy" (new posts)
+  const filter = category.startsWith('AI for Creator')
+    ? `AI for Creator%`
+    : category;
   const { data, error } = await getPublicClient()
-    .from('posts').select('*').eq('status', 'published').ilike('category', category)
+    .from('posts').select('*').eq('status', 'published').ilike('category', filter)
     .order('published_at', { ascending: false });
   if (error) { console.error('getPostsByCategory:', error); return []; }
   return (data as DbPost[]).map(toPostMeta);

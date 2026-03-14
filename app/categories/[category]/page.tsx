@@ -28,8 +28,14 @@ const CATEGORY_META: Record<string, { title: string; description: string; icon: 
     icon: "📝",
   },
   "ai-for-creators": {
-    title:       "AI for Creators",
-    description: "Use AI tools to produce content faster, automate your workflow, and 10x your output as a solo creator.",
+    // Legacy slug redirect — keeps old URLs working
+    title:       "AI for Creator Economy",
+    description: "Exactly how to use AI to grow your channel, build courses, and run your creator business. Step-by-step workflows with ChatGPT, Gemini, ElevenLabs, and more — not just \"AI can help\" theory.",
+    icon: "🤖",
+  },
+  "ai-for-creator-economy": {
+    title:       "AI for Creator Economy",
+    description: "Exactly how to use AI to grow your channel, build courses, and run your creator business. Step-by-step workflows with ChatGPT, Gemini, ElevenLabs, and more — not just \"AI can help\" theory.",
     icon: "🤖",
   },
 };
