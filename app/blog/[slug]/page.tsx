@@ -8,9 +8,9 @@ import GraphyLink from "@/components/GraphyLink";
 import QuickAnswer from "@/components/QuickAnswer";
 import NewsletterSignup from "@/components/NewsletterSignup";
 
-// ISR — new posts served within 60 seconds, no rebuild needed
-export const revalidate = 60;
-export const dynamicParams = true; // serve slugs not in generateStaticParams
+// force-dynamic: always render fresh — avoids stale ISR cache masking errors
+export const dynamic       = 'force-dynamic';
+export const dynamicParams = true; // serve any slug
 
 interface Props { params: { slug: string } }
 

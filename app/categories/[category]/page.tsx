@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import BlogCard from "@/components/BlogCard";
 import { getPostsByCategory } from "@/lib/posts";
 
-export const revalidate = 60;
+export const dynamic       = 'force-dynamic';
 export const dynamicParams = true;
 
 const CATEGORY_META: Record<string, { title: string; description: string; icon: string }> = {

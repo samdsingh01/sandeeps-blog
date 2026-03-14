@@ -54,12 +54,63 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const slug         = (searchParams.get('slug') ?? '').trim();
   const forcePublish = searchParams.get('publish') === 'true';
+  const healAll      = searchParams.get('all') === 'true';
+
+  // Heal ALL published posts in one pass
+  if (healAll) {
+    return runHealAll(forcePublish);
+  }
 
   if (!slug) {
-    return NextResponse.json({ error: 'slug query param required' }, { status: 400 });
+    return NextResponse.json({ error: 'slug query param required, or use ?all=true to heal every post' }, { status: 400 });
   }
 
   return runHeal(slug, forcePublish);
+}
+
+async function runHealAll(forcePublish: boolean) {
+  const db = getServiceClient();
+  const { data: posts, error } = await db
+    .from('posts')
+    .select('slug')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false });
+
+  if (error || !posts?.length) {
+    return NextResponse.json({ error: 'Could not fetch posts', detail: error?.message }, { status: 500 });
+  }
+
+  console.log(`[Heal] Healing all ${posts.length} published posts...`);
+
+  const results: Array<{ slug: string; healed: number; failed: number }> = [];
+
+  for (const post of posts) {
+    try {
+      const { healPost } = await import('@/agent/selfheal');
+      const result = await healPost(post.slug);
+
+      if (forcePublish) {
+        await db.from('posts').update({ status: 'published' }).eq('slug', post.slug);
+      }
+
+      results.push({ slug: post.slug, healed: result.healed, failed: result.failed });
+      console.log(`[Heal] ✅ ${post.slug} — healed: ${result.healed}, failed: ${result.failed}`);
+    } catch (err) {
+      console.error(`[Heal] Error on ${post.slug}:`, err);
+      results.push({ slug: post.slug, healed: 0, failed: 1 });
+    }
+  }
+
+  const totalHealed = results.reduce((s, r) => s + r.healed, 0);
+  const totalFailed = results.reduce((s, r) => s + r.failed, 0);
+
+  return NextResponse.json({
+    success:      totalFailed === 0,
+    totalPosts:   posts.length,
+    totalHealed,
+    totalFailed,
+    results,
+  });
 }
 
 async function runHeal(slug: string, forcePublish: boolean) {
