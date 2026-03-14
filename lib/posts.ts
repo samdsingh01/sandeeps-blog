@@ -25,26 +25,41 @@ export interface Post extends PostMeta {
 
 function toPostMeta(row: DbPost): PostMeta {
   return {
-    slug:        row.slug,
-    title:       row.title,
-    description: row.description,
-    date:        row.published_at,
-    category:    row.category,
-    tags:        row.tags ?? [],
-    author:      row.author,
-    authorRole:  row.author_role,
-    readingTime: row.reading_time,
-    featured:    row.featured,
-    coverImage:  row.cover_image,
-    seoKeywords: row.seo_keywords ?? [],
+    slug:        row.slug        ?? '',
+    title:       row.title       ?? 'Untitled',
+    description: row.description ?? '',
+    date:        row.published_at ?? new Date().toISOString(),
+    category:    row.category    ?? 'General',
+    // Guard: DB may return null even though schema says NOT NULL (migration timing)
+    tags:        Array.isArray(row.tags)        ? row.tags        : [],
+    author:      row.author      ?? 'Sandeep Singh',
+    authorRole:  row.author_role ?? 'Co-founder, Graphy.com',
+    readingTime: row.reading_time ?? '5 min read',
+    featured:    row.featured    ?? false,
+    coverImage:  row.cover_image ?? '/images/default-cover.svg',
+    seoKeywords: Array.isArray(row.seo_keywords) ? row.seo_keywords : [],
   };
+}
+
+function parseFaqs(raw: unknown): FAQItem[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as FAQItem[];
+  // Handle rare case where faq is stored/returned as a JSON string
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed as FAQItem[] : [];
+    } catch { return []; }
+  }
+  return [];
 }
 
 function toPost(row: DbPost): Post {
   return {
     ...toPostMeta(row),
-    content: row.content_html,
-    faqs:    row.faq ?? [],
+    // Guard: content_html may be empty/null for posts created before migration
+    content: row.content_html || row.content || '',
+    faqs:    parseFaqs(row.faq),
   };
 }
 

@@ -20,31 +20,50 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const post = await getPost(params.slug);
-  if (!post) return { title: "Post Not Found" };
-  return {
-    title:       post.title,
-    description: post.description,
-    keywords:    post.seoKeywords,
-    authors:     [{ name: post.author }],
-    openGraph: {
-      title:         post.title,
-      description:   post.description,
-      type:          "article",
-      publishedTime: post.date,
-      authors:       [post.author],
-      tags:          post.tags,
-    },
-  };
+  try {
+    const post = await getPost(params.slug);
+    if (!post) return { title: "Post Not Found" };
+    return {
+      title:       post.title,
+      description: post.description,
+      keywords:    post.seoKeywords ?? [],
+      authors:     [{ name: post.author }],
+      openGraph: {
+        title:         post.title,
+        description:   post.description,
+        type:          "article",
+        publishedTime: post.date,
+        authors:       [post.author],
+        tags:          post.tags ?? [],
+      },
+    };
+  } catch {
+    return { title: "Post Not Found" };
+  }
 }
 
 export default async function BlogPostPage({ params }: Props) {
-  const [post, related] = await Promise.all([
-    getPost(params.slug),
-    getRelatedPosts(params.slug),
-  ]);
+  let post: Awaited<ReturnType<typeof getPost>>;
+  let related: Awaited<ReturnType<typeof getRelatedPosts>>;
+
+  try {
+    [post, related] = await Promise.all([
+      getPost(params.slug),
+      getRelatedPosts(params.slug),
+    ]);
+  } catch (err) {
+    console.error(`[BlogPostPage] Error loading post "${params.slug}":`, err);
+    notFound();
+  }
 
   if (!post) notFound();
+
+  // Ensure all arrays are safe at render time — guards against unexpected DB nulls
+  const safeFaqs       = Array.isArray(post.faqs)        ? post.faqs        : [];
+  const safeTags       = Array.isArray(post.tags)        ? post.tags        : [];
+  const safeSeoKw      = Array.isArray(post.seoKeywords) ? post.seoKeywords : [];
+  const safeContent    = post.content ?? '';
+  const safeCategory   = post.category ?? 'General';
 
   const articleSchema = {
     "@context":  "https://schema.org",
@@ -63,14 +82,14 @@ export default async function BlogPostPage({ params }: Props) {
       name:    "Sandeep's Blog",
       url:     "https://sandeeps.co",
     },
-    keywords: post.seoKeywords.join(", "),
+    keywords: safeSeoKw.join(", "),
   };
 
   // AEO: FAQ schema for Google AI Overviews + Perplexity
-  const faqSchema = post.faqs?.length > 0 ? {
+  const faqSchema = safeFaqs.length > 0 ? {
     "@context": "https://schema.org",
     "@type":    "FAQPage",
-    mainEntity: post.faqs.map((faq) => ({
+    mainEntity: safeFaqs.map((faq) => ({
       "@type":          "Question",
       name:             faq.question,
       acceptedAnswer: {
@@ -96,8 +115,8 @@ export default async function BlogPostPage({ params }: Props) {
           <span>/</span>
           <Link href="/blog" className="hover:text-brand-600">Blog</Link>
           <span>/</span>
-          <Link href={`/categories/${post.category.toLowerCase().replace(/\s+/g, "-")}`}
-            className="hover:text-brand-600">{post.category}</Link>
+          <Link href={`/categories/${safeCategory.toLowerCase().replace(/\s+/g, "-")}`}
+            className="hover:text-brand-600">{safeCategory}</Link>
           <span>/</span>
           <span className="text-gray-700 truncate max-w-xs">{post.title}</span>
         </div>
@@ -107,7 +126,7 @@ export default async function BlogPostPage({ params }: Props) {
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <header className="mb-10">
             <div className="flex items-center gap-3 mb-4">
-              <span className="category-badge">{post.category}</span>
+              <span className="category-badge">{safeCategory}</span>
               <span className="text-sm text-gray-400">{post.readingTime}</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight mb-5">
@@ -134,22 +153,22 @@ export default async function BlogPostPage({ params }: Props) {
 
           {/* Tags */}
           <div className="flex flex-wrap gap-2 mb-8">
-            {post.tags.map((tag) => (
+            {safeTags.map((tag) => (
               <span key={tag} className="tag-badge">{tag}</span>
             ))}
           </div>
 
           {/* Quick Answer box — targets Google Featured Snippets + AI answer engines */}
-          {post.faqs && post.faqs.length > 0 && (
+          {safeFaqs.length > 0 && (
             <QuickAnswer
-              question={post.faqs[0].question}
-              answer={post.faqs[0].answer}
+              question={safeFaqs[0].question}
+              answer={safeFaqs[0].answer}
             />
           )}
 
           {/* Body */}
           <div className="prose-blog"
-            dangerouslySetInnerHTML={{ __html: post.content }} />
+            dangerouslySetInnerHTML={{ __html: safeContent }} />
 
           {/* Newsletter — mid-content capture */}
           <div className="mt-10">
