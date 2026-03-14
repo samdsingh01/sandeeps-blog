@@ -130,7 +130,7 @@ Write only the markdown. No JSON. No preamble.`, 8192, 0.75);
 
   if (!coverOk) {
     try {
-      const newCover = await fetchCoverImage(post.title ?? post.slug, post.category ?? 'Creator Growth');
+      const newCover = await fetchCoverImage(post.title ?? post.slug, post.category ?? 'Creator Growth', post.slug);
       if (newCover) {
         updates.cover_image = newCover;
         result.checks.cover_image = { ok: true, fixed: true, detail: 'Fetched new cover image' };

@@ -6,7 +6,9 @@ const nextConfig = {
     unoptimized: false,
     // External image sources used by the agent for cover images
     remotePatterns: [
-      { protocol: 'https', hostname: 'picsum.photos' },         // free fallback covers
+      { protocol: 'https', hostname: '*.supabase.co' },         // Supabase Storage (Gemini-generated images)
+      { protocol: 'https', hostname: 'image.pollinations.ai' }, // Pollinations.ai fallback (Flux AI)
+      { protocol: 'https', hostname: 'picsum.photos' },         // final fallback covers
       { protocol: 'https', hostname: 'fastly.picsum.photos' },  // picsum CDN alias
       { protocol: 'https', hostname: 'images.unsplash.com' },   // Unsplash (when key is set)
     ],

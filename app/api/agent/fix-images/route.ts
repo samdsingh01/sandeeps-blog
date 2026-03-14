@@ -75,6 +75,7 @@ export async function GET(req: Request) {
       const newImage = await fetchCoverImage(
         post.title ?? post.slug,
         post.category ?? 'Creator Growth',
+        post.slug,
       );
 
       const { error: updateError } = await db

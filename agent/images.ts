@@ -5,80 +5,187 @@
  *
  * Pipeline:
  *  1. Gemini writes a detailed, topic-specific image prompt
- *  2. Pollinations.ai (free Flux AI model, no API key) renders the image
- *  3. Falls back to Unsplash topic search if Pollinations is unavailable
- *  4. Final fallback: picsum.photos with a topic-seeded URL (always unique)
+ *  2. Gemini 2.0 Flash generates the actual image (base64 → Supabase Storage)
+ *  3. Falls back to Pollinations.ai (Flux model, no API key) if Gemini image gen fails
+ *  4. Final fallback: topic-seeded picsum URL (always unique, never breaks)
  *
- * Every post gets a UNIQUE, AI-generated cover image.
+ * Every post gets a UNIQUE, AI-generated cover image. The slug is used as the
+ * storage key so the same post always gets the same image URL even after re-heal.
  */
 
 import { generateImagePrompt } from './gemini';
+import { getServiceClient }    from '../lib/supabase';
 
-interface UnsplashPhoto {
-  urls: { regular: string };
-}
+const STORAGE_BUCKET = 'post-covers';
+
+// ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
  * Generate an AI cover image for a blog post.
- * Uses Gemini to write the prompt, Pollinations.ai to render it.
+ * Uses Gemini to both write the prompt AND render the image.
+ *
+ * @param topic    - Post title or topic string
+ * @param category - Post category (used for style guidance)
+ * @param slug     - Post slug (used as storage filename; optional but recommended)
  */
 export async function fetchCoverImage(
-  topic: string,
+  topic:    string,
   category: string,
+  slug?:    string,
 ): Promise<string> {
-  // ── 1. Generate AI image prompt with Gemini ────────────────────────────────
+  const storageKey = slug ?? slugifyTopic(topic);
+
+  // ── 1. Generate AI image prompt with Gemini ──────────────────────────────
   let imagePrompt: string;
   try {
     imagePrompt = await generateImagePrompt(topic, category);
-    console.log(`[Images] Gemini prompt: "${imagePrompt.slice(0, 80)}..."`);
+    console.log(`[Images] Gemini prompt (${storageKey}): "${imagePrompt.slice(0, 80)}..."`);
   } catch (err) {
-    console.warn('[Images] Gemini prompt generation failed, using topic fallback:', err);
+    console.warn('[Images] Prompt generation failed, using fallback prompt:', err);
     imagePrompt = buildFallbackPrompt(topic, category);
   }
 
-  // ── 2. Render with Pollinations.ai (Flux model, free, no watermark) ────────
-  const pollinationsUrl = buildPollinationsUrl(imagePrompt, topic);
-
+  // ── 2. Generate image with Gemini 2.0 Flash → upload to Supabase Storage ──
   try {
-    // Verify Pollinations can serve the image (HEAD check with 10s timeout)
+    const url = await generateAndStoreGeminiImage(imagePrompt, storageKey);
+    if (url) {
+      console.log(`[Images] ✅ Gemini image stored: ${url.slice(0, 80)}...`);
+      return url;
+    }
+  } catch (err) {
+    console.warn('[Images] Gemini image generation failed, trying Pollinations:', err);
+  }
+
+  // ── 3. Fallback: Pollinations.ai (free Flux model, no API key needed) ─────
+  const pollinationsUrl = buildPollinationsUrl(imagePrompt, topic);
+  try {
     const check = await fetch(pollinationsUrl, {
       method: 'HEAD',
       signal: AbortSignal.timeout(10_000),
     });
     if (check.ok) {
-      console.log(`[Images] ✅ AI image (Pollinations): ${pollinationsUrl.slice(0, 80)}...`);
+      console.log(`[Images] ✅ Pollinations fallback: ${pollinationsUrl.slice(0, 80)}...`);
       return pollinationsUrl;
     }
-    console.warn(`[Images] Pollinations returned ${check.status} — trying Unsplash...`);
+    console.warn(`[Images] Pollinations returned ${check.status}`);
   } catch (err) {
-    console.warn('[Images] Pollinations check timed out — trying Unsplash:', err);
+    console.warn('[Images] Pollinations timed out:', err);
   }
 
-  // ── 3. Fallback: Unsplash API (if API key is set) ────────────────────────
-  const unsplashUrl = await tryUnsplash(topic, category);
-  if (unsplashUrl) return unsplashUrl;
-
-  // ── 4. Final fallback: unique picsum (always works, topic-seeded) ─────────
-  return getTopicFallback(topic);
+  // ── 4. Final fallback: topic-seeded picsum (always works) ─────────────────
+  const fallback = getTopicFallback(topic);
+  console.log(`[Images] Using picsum fallback: ${fallback}`);
+  return fallback;
 }
 
+// ── Gemini Image Generation ───────────────────────────────────────────────────
+
 /**
- * Build the Pollinations.ai image URL.
- * - model=flux → high quality Flux image generation
- * - seed based on slug hash → same post always gets the same image
- * - nologo → no Pollinations watermark
- * - enhance → auto-enhances the prompt for better results
+ * Calls the Gemini 2.0 Flash image generation REST API, decodes the base64
+ * image, uploads it to Supabase Storage, and returns the public URL.
+ *
+ * Uses the REST API directly because the @google/generative-ai SDK (0.21.0)
+ * does not yet type `responseModalities` for image generation.
  */
+async function generateAndStoreGeminiImage(
+  prompt:     string,
+  storageKey: string,
+): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+
+  // ── Call Gemini 2.0 Flash image generation ────────────────────────────────
+  const model  = 'gemini-2.0-flash-preview-image-generation';
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const body = {
+    contents: [{
+      role:  'user',
+      parts: [{ text: `Create a professional, visually striking blog cover image (16:9 ratio). No text, no words, no letters in the image. ${prompt}` }],
+    }],
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+    },
+  };
+
+  const res = await fetch(apiUrl, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+    signal:  AbortSignal.timeout(30_000), // 30s timeout for image generation
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini image gen failed ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json() as GeminiImageResponse;
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+
+  // Find the image part in the response
+  const imagePart = parts.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
+  if (!imagePart?.inlineData) {
+    const blockReason = data.promptFeedback?.blockReason;
+    throw new Error(`No image in Gemini response${blockReason ? ` (blocked: ${blockReason})` : ''}`);
+  }
+
+  const { data: base64Data, mimeType } = imagePart.inlineData;
+  const ext         = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+  const filename    = `${storageKey}.${ext}`;
+  const imageBuffer = Buffer.from(base64Data, 'base64');
+
+  // ── Upload to Supabase Storage ─────────────────────────────────────────────
+  const supabase = getServiceClient();
+
+  // Ensure the bucket exists (create as public if it doesn't)
+  const { data: buckets } = await supabase.storage.listBuckets();
+  const bucketExists = buckets?.some((b) => b.name === STORAGE_BUCKET);
+
+  if (!bucketExists) {
+    const { error: bucketErr } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+      public:           true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      fileSizeLimit:    5_242_880, // 5 MB
+    });
+    if (bucketErr) {
+      throw new Error(`Failed to create Storage bucket: ${bucketErr.message}`);
+    }
+    console.log(`[Images] Created Supabase Storage bucket "${STORAGE_BUCKET}"`);
+  }
+
+  // Upload (upsert: overwrite if slug already has an image from a previous heal)
+  const { error: uploadErr } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filename, imageBuffer, {
+      contentType:  mimeType,
+      upsert:       true,
+      cacheControl: '31536000', // 1 year — image is stable once generated
+    });
+
+  if (uploadErr) {
+    throw new Error(`Supabase Storage upload failed: ${uploadErr.message}`);
+  }
+
+  // Return the public URL
+  const { data: urlData } = supabase.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(filename);
+
+  return urlData.publicUrl;
+}
+
+// ── Pollinations fallback ─────────────────────────────────────────────────────
+
 function buildPollinationsUrl(prompt: string, topic: string): string {
-  const seed = hashCode(topic);
+  const seed    = hashCode(topic);
   const encoded = encodeURIComponent(prompt);
   return `https://image.pollinations.ai/prompt/${encoded}?width=1200&height=630&model=flux&nologo=true&enhance=true&seed=${seed}`;
 }
 
-/**
- * Simple deterministic hash for a string (used as Pollinations seed).
- * Ensures the same topic always generates the same image.
- */
+// ── Utility helpers ───────────────────────────────────────────────────────────
+
+/** Simple deterministic hash → numeric seed for Pollinations fallback */
 function hashCode(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
@@ -87,10 +194,7 @@ function hashCode(str: string): number {
   return Math.abs(hash) % 999_999;
 }
 
-/**
- * Fallback image prompt when Gemini is unavailable.
- * Topic-aware, always produces something relevant.
- */
+/** Fallback image prompt when Gemini text generation is unavailable */
 function buildFallbackPrompt(topic: string, category: string): string {
   const categoryPrompts: Record<string, string> = {
     'YouTube Monetization': `Professional YouTube creator studio setup for "${topic}", camera, ring light, editing screen showing analytics, cinematic lighting, 16:9`,
@@ -102,69 +206,36 @@ function buildFallbackPrompt(topic: string, category: string): string {
   return categoryPrompts[category] ?? `Professional blog header for "${topic}", modern workspace, digital creator aesthetic, clean and vibrant, 16:9 wide format`;
 }
 
-/**
- * Try Unsplash API with topic-specific keywords.
- * Returns null if no API key or request fails.
- */
-async function tryUnsplash(topic: string, category: string): Promise<string | null> {
-  const key = process.env.UNSPLASH_ACCESS_KEY;
-  if (!key) return null;
-
-  const query = buildUnsplashQuery(topic, category);
-
-  try {
-    const url = `https://api.unsplash.com/photos/random?query=${encodeURIComponent(query)}&orientation=landscape&content_filter=high`;
-    const res  = await fetch(url, {
-      headers: { Authorization: `Client-ID ${key}` },
-      signal:  AbortSignal.timeout(8_000),
-    });
-
-    if (res.ok) {
-      const photo = await res.json() as UnsplashPhoto;
-      if (photo?.urls?.regular) {
-        console.log(`[Images] ✅ Unsplash fallback: ${photo.urls.regular.slice(0, 60)}...`);
-        return photo.urls.regular;
-      }
-    }
-  } catch { /* silent — move to next fallback */ }
-
-  return null;
-}
-
-/**
- * Build a topic-specific Unsplash query.
- */
-function buildUnsplashQuery(topic: string, category: string): string {
-  const stopWords = new Set(['how', 'to', 'the', 'a', 'an', 'and', 'or', 'for', 'in', 'on', 'at', 'with', 'your', 'my', 'is', 'are', 'vs', 'versus', 'best', 'top', 'make', 'get', 'use']);
-  const keywords = topic
+/** Slugify a topic string into a safe Supabase Storage filename */
+function slugifyTopic(topic: string): string {
+  return topic
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 2 && !stopWords.has(w))
-    .slice(0, 3)
-    .join(' ');
-
-  const categoryContext: Record<string, string> = {
-    'YouTube Monetization': 'youtube creator studio',
-    'Course Creation':       'online learning education',
-    'Creator Growth':        'social media digital growth',
-    'Content Strategy':      'content marketing planning',
-    'AI for Creators':       'artificial intelligence technology',
-  };
-
-  return `${keywords} ${categoryContext[category] ?? 'digital creator'}`.trim();
-}
-
-/**
- * Final fallback: unique picsum image seeded from the topic string.
- * Different topic = different image (no more identical covers per category).
- */
-function getTopicFallback(topic: string): string {
-  const seed = topic
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 40);
+    .slice(0, 60);
+}
+
+/** Final fallback: unique picsum image seeded from the topic string */
+function getTopicFallback(topic: string): string {
+  const seed = slugifyTopic(topic).slice(0, 40);
   return `https://picsum.photos/seed/${seed}/1200/630`;
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface GeminiImageResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?:       string;
+        inlineData?: {
+          mimeType: string;
+          data:     string; // base64-encoded image bytes
+        };
+      }>;
+    };
+  }>;
+  promptFeedback?: { blockReason?: string };
 }

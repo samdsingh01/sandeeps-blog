@@ -147,7 +147,7 @@ ${qualityReport.wordCount < 1400 ? `  → Current word count: ${qualityReport.wo
     const readingTime  = calcReadingTime(markdown);
 
     // ── 7. Fetch cover image ───────────────────────────────────────────────
-    const coverImage = await fetchCoverImage(topic, category);
+    const coverImage = await fetchCoverImage(topic, category, slug);
 
     // ── 8. Write to Supabase ───────────────────────────────────────────────
     const { error: insertError } = await db.from('posts').insert({
