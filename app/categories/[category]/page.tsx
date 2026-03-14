@@ -51,7 +51,13 @@ export default async function CategoryPage({ params }: Props) {
   const meta = CATEGORY_META[params.category];
   if (!meta) notFound();
 
-  const posts = await getPostsByCategory(meta.title);
+  let posts: Awaited<ReturnType<typeof getPostsByCategory>> = [];
+  try {
+    posts = await getPostsByCategory(meta.title);
+  } catch (err) {
+    console.error(`[CategoryPage] Error loading category "${params.category}":`, err);
+    posts = [];
+  }
 
   return (
     <div className="py-12">
