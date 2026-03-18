@@ -252,86 +252,131 @@ async function generateAndStoreGeminiImage(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
-  // Try stable model first, fall back to preview name
-  const MODELS = [
-    'gemini-2.0-flash-exp',
-    'gemini-2.0-flash-preview-image-generation',
-  ];
-
+  const fullPrompt = `Create a professional blog cover image. No text, no words, no letters anywhere. ${prompt}`;
+  let b64: string | null = null;
+  let mimeType = 'image/png';
   let lastError = '';
 
-  for (const model of MODELS) {
+  // ── Attempt 1: Gemini 2.0 Flash image generation (generateContent) ────────
+  // Correct model name: gemini-2.0-flash-exp-image-generation
+  // (NOT flash-exp, NOT flash-preview-image-generation — those are 404)
+  const geminiModels = ['gemini-2.0-flash-exp-image-generation'];
+
+  for (const model of geminiModels) {
     try {
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-      const body = {
-        contents: [{
-          role:  'user',
-          parts: [{ text: `Create a professional blog image. No text, no words, no letters. ${prompt}` }],
-        }],
-        // MUST include TEXT alongside IMAGE — IMAGE-only causes 400 error
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-      };
-
-      const res = await fetch(apiUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-        signal:  AbortSignal.timeout(40_000),
-      });
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+          }),
+          signal: AbortSignal.timeout(40_000),
+        }
+      );
 
       if (!res.ok) {
         const errText = await res.text();
-        lastError = `Gemini image gen [${model}] ${res.status}: ${errText.slice(0, 300)}`;
-        console.warn(`[Images] ${lastError} — trying next model`);
-        continue; // try next model
-      }
-
-      const data      = await res.json() as GeminiImageResponse;
-      const parts     = data.candidates?.[0]?.content?.parts ?? [];
-      const imagePart = parts.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
-
-      if (!imagePart?.inlineData) {
-        const reason = data.promptFeedback?.blockReason;
-        lastError = `No image in Gemini response [${model}]${reason ? ` (blocked: ${reason})` : ''}`;
-        console.warn(`[Images] ${lastError} — trying next model`);
+        lastError = `[${model}] ${res.status}: ${errText.slice(0, 200)}`;
+        console.warn(`[Images] Gemini generateContent failed: ${lastError}`);
         continue;
       }
 
-      // Success — upload to Supabase and return URL
-      const { data: b64, mimeType } = imagePart.inlineData;
-      const ext         = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-      const filename    = `${storageKey}.${ext}`;
-      const imageBuffer = Buffer.from(b64, 'base64');
+      const data  = await res.json() as GeminiImageResponse;
+      const parts = data.candidates?.[0]?.content?.parts ?? [];
+      const img   = parts.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
 
-      const supabase = getServiceClient();
-
-      // Auto-create bucket if needed
-      const { data: buckets } = await supabase.storage.listBuckets();
-      if (!buckets?.some((b) => b.name === STORAGE_BUCKET)) {
-        await supabase.storage.createBucket(STORAGE_BUCKET, {
-          public: true, allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'], fileSizeLimit: 5_242_880,
-        });
-        console.log(`[Images] Created Storage bucket "${STORAGE_BUCKET}"`);
+      if (img?.inlineData) {
+        b64      = img.inlineData.data;
+        mimeType = img.inlineData.mimeType;
+        console.log(`[Images] ✅ Gemini generateContent succeeded with "${model}"`);
+        break;
       }
 
-      const { error: uploadErr } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(filename, imageBuffer, { contentType: mimeType, upsert: true, cacheControl: '31536000' });
-
-      if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
-
-      const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filename);
-      console.log(`[Images] ✅ Gemini image stored via model "${model}"`);
-      return urlData.publicUrl;
-
+      const reason = data.promptFeedback?.blockReason;
+      lastError = `No image in response [${model}]${reason ? ` blocked: ${reason}` : ''}`;
+      console.warn(`[Images] ${lastError}`);
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
-      console.warn(`[Images] Model "${model}" threw: ${lastError}`);
+      lastError = `[${model}] threw: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn(`[Images] ${lastError}`);
     }
   }
 
-  throw new Error(`All Gemini models failed. Last error: ${lastError}`);
+  // ── Attempt 2: Imagen 3 (predict endpoint — different format) ─────────────
+  // Imagen 3 uses :predict not :generateContent, and a different request/response shape
+  if (!b64) {
+    const imagenModels = ['imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'];
+
+    for (const model of imagenModels) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
+          {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              instances:  [{ prompt: fullPrompt }],
+              parameters: { sampleCount: 1, aspectRatio: '16:9', safetyFilterLevel: 'block_some' },
+            }),
+            signal: AbortSignal.timeout(40_000),
+          }
+        );
+
+        if (!res.ok) {
+          const errText = await res.text();
+          lastError = `[${model}] ${res.status}: ${errText.slice(0, 200)}`;
+          console.warn(`[Images] Imagen predict failed: ${lastError}`);
+          continue;
+        }
+
+        const data = await res.json() as ImagenResponse;
+        const pred = data.predictions?.[0];
+
+        if (pred?.bytesBase64Encoded) {
+          b64      = pred.bytesBase64Encoded;
+          mimeType = pred.mimeType ?? 'image/png';
+          console.log(`[Images] ✅ Imagen 3 succeeded with "${model}"`);
+          break;
+        }
+
+        lastError = `No image in Imagen response [${model}]`;
+        console.warn(`[Images] ${lastError}`);
+      } catch (err) {
+        lastError = `[${model}] threw: ${err instanceof Error ? err.message : String(err)}`;
+        console.warn(`[Images] ${lastError}`);
+      }
+    }
+  }
+
+  if (!b64) {
+    throw new Error(`All image generation models failed. Last: ${lastError}`);
+  }
+
+  // ── Upload to Supabase Storage ─────────────────────────────────────────────
+  const ext         = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+  const filename    = `${storageKey}.${ext}`;
+  const imageBuffer = Buffer.from(b64, 'base64');
+  const supabase    = getServiceClient();
+
+  // Auto-create bucket if needed
+  const { data: buckets } = await supabase.storage.listBuckets();
+  if (!buckets?.some((b) => b.name === STORAGE_BUCKET)) {
+    await supabase.storage.createBucket(STORAGE_BUCKET, {
+      public: true, allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'], fileSizeLimit: 5_242_880,
+    });
+    console.log(`[Images] Created Storage bucket "${STORAGE_BUCKET}"`);
+  }
+
+  const { error: uploadErr } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filename, imageBuffer, { contentType: mimeType, upsert: true, cacheControl: '31536000' });
+
+  if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
+
+  const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filename);
+  return urlData.publicUrl;
 }
 
 // ── Pollinations fallback ─────────────────────────────────────────────────────
@@ -375,4 +420,9 @@ function getTopicFallback(topic: string): string {
 interface GeminiImageResponse {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> } }>;
   promptFeedback?: { blockReason?: string };
+}
+
+// Imagen 3 uses :predict endpoint with a different response shape
+interface ImagenResponse {
+  predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }>;
 }

@@ -56,23 +56,29 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 
-  // Test raw Gemini REST API directly before going through fetchCoverImage
-  const apiKey    = process.env.GEMINI_API_KEY!;
-  const modelTests: Array<{ model: string; status: number | null; hasImage: boolean; error: string | null }> = [];
+  // Test all candidate models directly against the Gemini REST API
+  const apiKey     = process.env.GEMINI_API_KEY!;
+  const testPrompt = 'A simple blue circle on a white background.';
+  const modelTests: Array<{ model: string; endpoint: string; status: number | null; hasImage: boolean; error: string | null }> = [];
 
-  for (const model of ['gemini-2.0-flash-exp', 'gemini-2.0-flash-preview-image-generation']) {
+  // generateContent models (Gemini 2.0 Flash image gen)
+  for (const model of [
+    'gemini-2.0-flash-exp-image-generation',  // ← correct name
+    'gemini-2.0-flash-exp',                   // generic flash (no image gen)
+    'gemini-2.0-flash-preview-image-generation', // old name — expect 404
+  ]) {
     try {
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const res = await fetch(apiUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: `Create a simple test image: a blue circle on white background.` }] }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-        }),
-        signal: AbortSignal.timeout(35_000),
-      });
-
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: testPrompt }] }],
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+          }),
+          signal: AbortSignal.timeout(35_000),
+        }
+      );
       const text = await res.text();
       let hasImage = false;
       try {
@@ -80,11 +86,36 @@ export async function GET(request: NextRequest) {
         hasImage = (json.candidates?.[0]?.content?.parts ?? []).some(
           (p: any) => p.inlineData?.mimeType?.startsWith('image/')
         );
-      } catch { /* parse failed */ }
-
-      modelTests.push({ model, status: res.status, hasImage, error: res.ok ? null : text.slice(0, 300) });
+      } catch { /* noop */ }
+      modelTests.push({ model, endpoint: 'generateContent', status: res.status, hasImage, error: res.ok ? null : text.slice(0, 250) });
     } catch (err) {
-      modelTests.push({ model, status: null, hasImage: false, error: String(err).slice(0, 300) });
+      modelTests.push({ model, endpoint: 'generateContent', status: null, hasImage: false, error: String(err).slice(0, 250) });
+    }
+  }
+
+  // predict models (Imagen 3 — different endpoint and request format)
+  for (const model of ['imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001']) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
+        {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instances: [{ prompt: testPrompt }],
+            parameters: { sampleCount: 1, aspectRatio: '16:9' },
+          }),
+          signal: AbortSignal.timeout(35_000),
+        }
+      );
+      const text = await res.text();
+      let hasImage = false;
+      try {
+        const json = JSON.parse(text);
+        hasImage = !!(json.predictions?.[0]?.bytesBase64Encoded);
+      } catch { /* noop */ }
+      modelTests.push({ model, endpoint: 'predict', status: res.status, hasImage, error: res.ok ? null : text.slice(0, 250) });
+    } catch (err) {
+      modelTests.push({ model, endpoint: 'predict', status: null, hasImage: false, error: String(err).slice(0, 250) });
     }
   }
 
