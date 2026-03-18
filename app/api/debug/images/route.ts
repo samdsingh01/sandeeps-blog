@@ -56,8 +56,33 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 
-  // Test all candidate models directly against the Gemini REST API
-  const apiKey     = process.env.GEMINI_API_KEY!;
+  const apiKey = process.env.GEMINI_API_KEY!;
+
+  // ── Step 1: List available models for this API key ────────────────────────
+  // This tells us exactly what the key can access
+  let availableModels: string[] = [];
+  let imageCapableModels: string[] = [];
+  let listModelsError: string | null = null;
+
+  try {
+    const listRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=100`,
+      { signal: AbortSignal.timeout(10_000) }
+    );
+    const listData = await listRes.json();
+    if (listRes.ok && listData.models) {
+      availableModels    = listData.models.map((m: any) => m.name?.replace('models/', '') ?? '');
+      imageCapableModels = availableModels.filter((n: string) =>
+        n.includes('image') || n.includes('imagen') || n.includes('vision')
+      );
+    } else {
+      listModelsError = JSON.stringify(listData).slice(0, 300);
+    }
+  } catch (err) {
+    listModelsError = String(err).slice(0, 200);
+  }
+
+  // ── Step 2: Test all candidate image generation models ────────────────────
   const testPrompt = 'A simple blue circle on a white background.';
   const modelTests: Array<{ model: string; endpoint: string; status: number | null; hasImage: boolean; error: string | null }> = [];
 
@@ -136,12 +161,19 @@ export async function GET(request: NextRequest) {
   const isPicsumUrl     = imageUrl?.includes('picsum') ?? false;
 
   return NextResponse.json({
-    success:        !!imageUrl,
+    success:           !!imageUrl,
     imageUrl,
-    imageSource:    isSupabaseUrl ? 'Gemini → Supabase ✅' : isPollinationsUrl ? 'Pollinations fallback ⚠️' : isPicsumUrl ? 'Picsum fallback ❌' : 'unknown',
+    imageSource:       isSupabaseUrl ? 'Gemini → Supabase ✅' : isPollinationsUrl ? 'Pollinations fallback ⚠️' : isPicsumUrl ? 'Picsum fallback ❌' : 'unknown',
     pipelineError,
-    durationMs:     Date.now() - start,
+    durationMs:        Date.now() - start,
     modelTests,
+    // ListModels results — tells you what this API key can actually access
+    availableModels,
+    imageCapableModels,
+    listModelsError,
+    diagnosis: imageCapableModels.length === 0
+      ? '⚠️ No image-capable models found for this API key. You need to either: (1) enable image generation in Google AI Studio for this key, or (2) use a Vertex AI key with Imagen access.'
+      : `✅ Found ${imageCapableModels.length} image-capable model(s): ${imageCapableModels.join(', ')}`,
     envCheck,
     topic,
     category,

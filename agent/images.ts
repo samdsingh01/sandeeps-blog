@@ -54,15 +54,12 @@ export async function fetchCoverImage(
     console.warn('[Images] Gemini cover gen failed, trying Pollinations:', err);
   }
 
-  // 3. Pollinations.ai fallback
+  // 3. Pollinations.ai fallback — return URL directly, no HEAD check needed.
+  // Pollinations generates on-demand; the browser fetches the image when it renders.
+  // The HEAD check was causing unnecessary timeouts and falling through to picsum.
   const pollinationsUrl = buildPollinationsUrl(imagePrompt, topic);
-  try {
-    const check = await fetch(pollinationsUrl, { method: 'HEAD', signal: AbortSignal.timeout(10_000) });
-    if (check.ok) { console.log(`[Images] ✅ Pollinations cover: ${pollinationsUrl.slice(0, 80)}`); return pollinationsUrl; }
-  } catch { /* fall through */ }
-
-  // 4. Picsum final fallback
-  return getTopicFallback(topic);
+  console.log(`[Images] ⚠️ Falling back to Pollinations: ${pollinationsUrl.slice(0, 80)}`);
+  return pollinationsUrl;
 }
 
 // ── Inline concept images ─────────────────────────────────────────────────────
@@ -154,17 +151,10 @@ Return ONLY the image prompt, nothing else.`,
         console.warn(`[Images] Gemini failed for section "${heading}", trying Pollinations:`, err);
       }
 
-      // Pollinations fallback per section
+      // Pollinations fallback per section — return URL directly, no HEAD check
       const pollinationsUrl = buildPollinationsUrl(prompt.trim(), `${slug}-${index}`);
-      try {
-        const check = await fetch(pollinationsUrl, { method: 'HEAD', signal: AbortSignal.timeout(10_000) });
-        if (check.ok) {
-          console.log(`[Images] ✅ Pollinations inline image ${index}`);
-          return { h2Index: index, heading, imageUrl: pollinationsUrl } satisfies ContentImage;
-        }
-      } catch { /* fall through */ }
-
-      return null; // give up on this section image
+      console.log(`[Images] ⚠️ Section ${index} falling back to Pollinations`);
+      return { h2Index: index, heading, imageUrl: pollinationsUrl } satisfies ContentImage;
     } catch (err) {
       console.warn(`[Images] Failed to generate inline image for section "${heading}":`, err);
       return null;
