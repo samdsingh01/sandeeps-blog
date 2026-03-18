@@ -14,18 +14,14 @@ import type { MetadataRoute } from 'next';
 import { getServiceClient }   from '@/lib/supabase';
 
 const SITE_URL   = 'https://sandeeps.co';
+// Must match the slugs in app/categories/[category]/page.tsx
 const CATEGORIES = [
-  'youtube-growth',
-  'monetization',
-  'online-courses',
-  'creator-economy',
-  'video-production',
-  'social-media',
-  'coaching',
   'youtube-monetization',
   'course-creation',
   'creator-growth',
-  'ai-for-creators',
+  'content-strategy',
+  'ai-for-creator-economy',
+  'ai-for-creators', // legacy slug — keep for backward compat
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

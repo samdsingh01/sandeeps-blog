@@ -50,7 +50,13 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const meta = CATEGORY_META[params.category];
   if (!meta) return { title: "Category Not Found" };
-  return { title: `${meta.title} | Sandeep's Blog`, description: meta.description };
+  // Use canonical to consolidate the legacy "ai-for-creators" slug with the new one
+  const canonicalSlug = params.category === 'ai-for-creators' ? 'ai-for-creator-economy' : params.category;
+  return {
+    title:       `${meta.title} | Sandeep's Blog`,
+    description: meta.description,
+    alternates:  { canonical: `https://sandeeps.co/categories/${canonicalSlug}` },
+  };
 }
 
 export default async function CategoryPage({ params }: Props) {

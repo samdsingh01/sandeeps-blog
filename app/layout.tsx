@@ -51,7 +51,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head>
         <link rel="icon" href="/favicon.ico" />
-        <link rel="canonical" href="https://sandeeps.co" />
+        {/* NOTE: Per-page canonical URLs are set in each page's generateMetadata() — NOT here.
+            A hardcoded canonical here would wrongly point every post to the homepage. */}
         {/* JSON-LD Site Identity */}
         <script
           type="application/ld+json"

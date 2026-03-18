@@ -23,18 +23,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const post = await getPost(params.slug);
     if (!post) return { title: "Post Not Found" };
+    const canonicalUrl = `https://sandeeps.co/blog/${params.slug}`;
     return {
       title:       post.title,
       description: post.description,
       keywords:    post.seoKeywords ?? [],
       authors:     [{ name: post.author }],
+      // Canonical tells Google the authoritative URL for this post
+      alternates: { canonical: canonicalUrl },
       openGraph: {
         title:         post.title,
         description:   post.description,
         type:          "article",
+        url:           canonicalUrl,
         publishedTime: post.date,
         authors:       [post.author],
         tags:          post.tags ?? [],
+        images:        post.coverImage
+          ? [{ url: post.coverImage, width: 1200, height: 630, alt: post.title }]
+          : undefined,
+      },
+      twitter: {
+        card:        'summary_large_image',
+        title:       post.title,
+        description: post.description,
+        images:      post.coverImage ? [post.coverImage] : undefined,
       },
     };
   } catch {
