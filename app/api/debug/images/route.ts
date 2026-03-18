@@ -29,20 +29,30 @@ export async function GET(request: NextRequest) {
   const topic    = searchParams.get('topic')    ?? 'how to monetize a YouTube channel with 1000 subscribers';
   const category = searchParams.get('category') ?? 'YouTube Monetization';
 
-  // Check env vars first
+  // Check env vars — mirrors exactly what lib/supabase.ts and agent/images.ts use
+  // SUPABASE_URL is the preferred name; NEXT_PUBLIC_SUPABASE_URL is the fallback
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const envCheck = {
-    GEMINI_API_KEY:      !!process.env.GEMINI_API_KEY,
-    SUPABASE_URL:        !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    SUPABASE_SERVICE_KEY:!!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    GEMINI_API_KEY:           !!process.env.GEMINI_API_KEY,
+    SUPABASE_URL:             !!process.env.SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    SUPABASE_URL_resolved:    !!supabaseUrl,   // true if either var is set
+    SUPABASE_SERVICE_KEY:     !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    CRON_SECRET:              !!process.env.CRON_SECRET,
   };
 
-  const missingEnv = Object.entries(envCheck).filter(([, v]) => !v).map(([k]) => k);
+  // Only block if Gemini key or Supabase URL is truly missing (check both var names)
+  const criticalMissing: string[] = [];
+  if (!process.env.GEMINI_API_KEY)    criticalMissing.push('GEMINI_API_KEY');
+  if (!supabaseUrl)                   criticalMissing.push('SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL)');
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) criticalMissing.push('SUPABASE_SERVICE_ROLE_KEY');
 
-  if (missingEnv.length > 0) {
+  if (criticalMissing.length > 0) {
     return NextResponse.json({
       success: false,
-      error:   `Missing env vars: ${missingEnv.join(', ')}`,
+      error:   `Missing env vars: ${criticalMissing.join(', ')}`,
       envCheck,
+      hint:    'Set these in Vercel Dashboard → Settings → Environment Variables',
     }, { status: 500 });
   }
 
