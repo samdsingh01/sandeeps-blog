@@ -316,12 +316,14 @@ async function generateAndStoreGeminiImage(
   // Auto-discovery: if ListModels reveals additional image-capable models, we use those too.
   const discoveredModels = await discoverImageModels(apiKey);
   const geminiModels = [
-    ...discoveredModels, // runtime-discovered models take priority
-    'gemini-2.0-flash',                          // stable 2.0 Flash (released Feb 2025)
-    'gemini-2.0-flash-exp',                      // experimental 2.0 Flash
-    'gemini-2.0-flash-exp-image-generation',     // dedicated image-gen variant
-    'gemini-2.0-flash-preview-image-generation', // preview name
-    'gemini-1.5-flash',                          // 1.5 Flash (older but widely available)
+    ...discoveredModels,                         // runtime-discovered models take priority
+    // Confirmed working models for this project (discovered via ListModels 2026-03-18):
+    'gemini-2.5-flash-image',                    // ✅ confirmed working
+    'gemini-3.1-flash-image-preview',            // ✅ confirmed working
+    'gemini-3-pro-image-preview',                // ✅ confirmed working (heavier)
+    // Legacy fallbacks (expect 404 but kept for other key projects):
+    'gemini-2.0-flash-exp-image-generation',
+    'gemini-2.0-flash-exp',
   ].filter((m, i, arr) => arr.indexOf(m) === i); // deduplicate
 
   for (const model of geminiModels) {
@@ -369,7 +371,13 @@ async function generateAndStoreGeminiImage(
   // ── Attempt 2: Imagen 3 (predict endpoint — different format) ─────────────
   // Imagen 3 uses :predict not :generateContent, and a different request/response shape
   if (!b64) {
-    const imagenModels = ['imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'];
+    // Confirmed working Imagen 4 models (discovered via ListModels 2026-03-18).
+    // imagen-3 models return 404 for this project.
+    const imagenModels = [
+      'imagen-4.0-fast-generate-001',   // ✅ fastest
+      'imagen-4.0-generate-001',         // ✅ standard quality
+      'imagen-4.0-ultra-generate-001',   // ✅ highest quality (slower)
+    ];
 
     for (const model of imagenModels) {
       try {

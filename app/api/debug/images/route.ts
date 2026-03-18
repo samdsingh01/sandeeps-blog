@@ -125,11 +125,14 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // predict models (Imagen 3 — different endpoint and request format)
+  // predict models (Imagen 4 confirmed working; Imagen 3 kept for reference)
   const predictModels = [
     ...imageCapableModels.filter((m: string) => m.includes('imagen')), // runtime-discovered
-    'imagen-3.0-generate-002',
-    'imagen-3.0-fast-generate-001',
+    'imagen-4.0-fast-generate-001',    // ✅ confirmed working
+    'imagen-4.0-generate-001',          // ✅ confirmed working
+    'imagen-4.0-ultra-generate-001',    // ✅ confirmed working
+    'imagen-3.0-generate-002',          // legacy — expect 404
+    'imagen-3.0-fast-generate-001',     // legacy — expect 404
   ].filter((m: string, i: number, arr: string[]) => arr.indexOf(m) === i);
 
   for (const model of predictModels) {
