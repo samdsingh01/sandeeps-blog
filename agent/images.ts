@@ -237,8 +237,13 @@ function buildFigureHtml(src: string, alt: string): string {
  * Calls Gemini 2.0 Flash image generation, uploads result to Supabase Storage,
  * and returns the public URL.
  *
- * Uses REST directly — the @google/generative-ai SDK 0.21.0 doesn't type
+ * Uses REST directly — the @google/generative-ai SDK doesn't type
  * `responseModalities` yet.
+ *
+ * IMPORTANT: responseModalities MUST include 'TEXT' alongside 'IMAGE' — Gemini
+ * rejects requests with ['IMAGE'] alone (400 INVALID_ARGUMENT).
+ * Model name: 'gemini-2.0-flash-exp' is the stable alias; the preview name is
+ * kept as a fallback.
  */
 async function generateAndStoreGeminiImage(
   prompt:     string,
@@ -247,63 +252,86 @@ async function generateAndStoreGeminiImage(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
-  const model  = 'gemini-2.0-flash-preview-image-generation';
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  // Try stable model first, fall back to preview name
+  const MODELS = [
+    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash-preview-image-generation',
+  ];
 
-  const body = {
-    contents: [{
-      role:  'user',
-      parts: [{ text: `Create a professional blog image. No text, no words, no letters. ${prompt}` }],
-    }],
-    generationConfig: { responseModalities: ['IMAGE'] },
-  };
+  let lastError = '';
 
-  const res = await fetch(apiUrl, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body),
-    signal:  AbortSignal.timeout(30_000),
-  });
+  for (const model of MODELS) {
+    try {
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gemini image gen ${res.status}: ${errText.slice(0, 200)}`);
+      const body = {
+        contents: [{
+          role:  'user',
+          parts: [{ text: `Create a professional blog image. No text, no words, no letters. ${prompt}` }],
+        }],
+        // MUST include TEXT alongside IMAGE — IMAGE-only causes 400 error
+        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+      };
+
+      const res = await fetch(apiUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+        signal:  AbortSignal.timeout(40_000),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        lastError = `Gemini image gen [${model}] ${res.status}: ${errText.slice(0, 300)}`;
+        console.warn(`[Images] ${lastError} — trying next model`);
+        continue; // try next model
+      }
+
+      const data      = await res.json() as GeminiImageResponse;
+      const parts     = data.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = parts.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
+
+      if (!imagePart?.inlineData) {
+        const reason = data.promptFeedback?.blockReason;
+        lastError = `No image in Gemini response [${model}]${reason ? ` (blocked: ${reason})` : ''}`;
+        console.warn(`[Images] ${lastError} — trying next model`);
+        continue;
+      }
+
+      // Success — upload to Supabase and return URL
+      const { data: b64, mimeType } = imagePart.inlineData;
+      const ext         = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+      const filename    = `${storageKey}.${ext}`;
+      const imageBuffer = Buffer.from(b64, 'base64');
+
+      const supabase = getServiceClient();
+
+      // Auto-create bucket if needed
+      const { data: buckets } = await supabase.storage.listBuckets();
+      if (!buckets?.some((b) => b.name === STORAGE_BUCKET)) {
+        await supabase.storage.createBucket(STORAGE_BUCKET, {
+          public: true, allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'], fileSizeLimit: 5_242_880,
+        });
+        console.log(`[Images] Created Storage bucket "${STORAGE_BUCKET}"`);
+      }
+
+      const { error: uploadErr } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(filename, imageBuffer, { contentType: mimeType, upsert: true, cacheControl: '31536000' });
+
+      if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
+
+      const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filename);
+      console.log(`[Images] ✅ Gemini image stored via model "${model}"`);
+      return urlData.publicUrl;
+
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      console.warn(`[Images] Model "${model}" threw: ${lastError}`);
+    }
   }
 
-  const data      = await res.json() as GeminiImageResponse;
-  const parts     = data.candidates?.[0]?.content?.parts ?? [];
-  const imagePart = parts.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
-
-  if (!imagePart?.inlineData) {
-    const reason = data.promptFeedback?.blockReason;
-    throw new Error(`No image in Gemini response${reason ? ` (blocked: ${reason})` : ''}`);
-  }
-
-  const { data: b64, mimeType } = imagePart.inlineData;
-  const ext         = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-  const filename    = `${storageKey}.${ext}`;
-  const imageBuffer = Buffer.from(b64, 'base64');
-
-  const supabase = getServiceClient();
-
-  // Auto-create bucket if needed
-  const { data: buckets } = await supabase.storage.listBuckets();
-  if (!buckets?.some((b) => b.name === STORAGE_BUCKET)) {
-    const { error: bucketErr } = await supabase.storage.createBucket(STORAGE_BUCKET, {
-      public: true, allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'], fileSizeLimit: 5_242_880,
-    });
-    if (bucketErr) throw new Error(`Bucket create failed: ${bucketErr.message}`);
-    console.log(`[Images] Created Storage bucket "${STORAGE_BUCKET}"`);
-  }
-
-  const { error: uploadErr } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filename, imageBuffer, { contentType: mimeType, upsert: true, cacheControl: '31536000' });
-
-  if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
-
-  const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filename);
-  return urlData.publicUrl;
+  throw new Error(`All Gemini models failed. Last error: ${lastError}`);
 }
 
 // ── Pollinations fallback ─────────────────────────────────────────────────────
@@ -328,7 +356,8 @@ function buildFallbackPrompt(topic: string, category: string): string {
     'Course Creation':       `Clean desk workspace for "${topic}", laptop with course slides, notebook, coffee, minimal aesthetic`,
     'Creator Growth':        `Rising analytics dashboard for "${topic}", social graphs, vibrant blue-purple gradient, tech aesthetic`,
     'Content Strategy':      `Content planning board for "${topic}", sticky notes, calendar, strategy map, professional workspace`,
-    'AI for Creators':       `Futuristic AI interface for "${topic}", neural network glow, holographic display, dark gradient`,
+    'AI for Creators':           `Futuristic AI interface for "${topic}", neural network glow, holographic display, dark gradient`,
+    'AI for Creator Economy':    `Futuristic AI tools interface for "${topic}", creator at laptop with AI overlay, data streams, vibrant purple-cyan gradient`,
   };
   return map[category] ?? `Professional blog cover for "${topic}", modern digital creator workspace, clean and vibrant, 16:9`;
 }
