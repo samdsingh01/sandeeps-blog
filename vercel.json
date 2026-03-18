@@ -18,6 +18,10 @@
       "schedule": "0 10 * * *"
     },
     {
+      "path":     "/api/agent/brainstorm",
+      "schedule": "0 6 * * 0"
+    },
+    {
       "path":     "/api/agent/refresh",
       "schedule": "0 7 * * 0"
     },

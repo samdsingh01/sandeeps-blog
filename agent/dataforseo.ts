@@ -118,3 +118,110 @@ function fallbackMetrics(keyword: string): KeywordMetrics {
     priority:     5,
   };
 }
+
+/**
+ * SERP result from Google organic search
+ */
+export interface SerpResult {
+  rank:        number;
+  url:         string;
+  title:       string;
+  description: string;
+  domain:      string;
+}
+
+/**
+ * Get top 10 organic search results for a keyword from DataForSEO SERP API.
+ * Returns empty array if DataForSEO is not configured or on any error.
+ */
+export async function getSerpResults(keyword: string, limit: number = 10): Promise<SerpResult[]> {
+  const auth = getAuth();
+  if (!auth) {
+    console.warn('[DataForSEO] Credentials not set — skipping SERP check');
+    return [];
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+    const res = await fetch(`${BASE_URL}/serp/google/organic/live/regular`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify([{
+        keyword,
+        location_code: 2840,
+        language_code: 'en',
+        device:        'desktop',
+        depth:         10,
+      }]),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      console.error('[DataForSEO] SERP API error:', res.status, await res.text());
+      return [];
+    }
+
+    const json = await res.json();
+    const items = json?.tasks?.[0]?.result?.[0]?.items ?? [];
+
+    const results: SerpResult[] = [];
+    for (const item of items) {
+      if (item.type !== 'organic') continue;
+
+      results.push({
+        rank:        item.rank ?? 0,
+        url:         item.url ?? '',
+        title:       item.title ?? '',
+        description: item.description ?? '',
+        domain:      item.domain ?? '',
+      });
+
+      if (results.length >= limit) break;
+    }
+
+    return results;
+  } catch (err) {
+    console.error('[DataForSEO] SERP request failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Get unused keywords from the keywords table, ordered by search volume and priority.
+ * Returns top `limit` keywords with search_volume and priority.
+ */
+export async function getTopUnusedKeywords(
+  db: any,
+  limit: number = 20,
+): Promise<Array<{ keyword: string; searchVolume: number; priority: number }>> {
+  try {
+    const { data, error } = await db
+      .from('keywords')
+      .select('keyword, search_volume, priority')
+      .eq('used', false)
+      .order('search_volume', { ascending: false, nullsFirst: false })
+      .order('priority', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('[getTopUnusedKeywords] Query error:', error);
+      return [];
+    }
+
+    return (data ?? []).map((row: any) => ({
+      keyword:     row.keyword,
+      searchVolume: row.search_volume ? parseInt(row.search_volume, 10) : 0,
+      priority:    row.priority ?? 0,
+    }));
+  } catch (err) {
+    console.error('[getTopUnusedKeywords] Unexpected error:', err);
+    return [];
+  }
+}

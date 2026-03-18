@@ -11,7 +11,9 @@ import { remark } from 'remark';
 import remarkHtml from 'remark-html';
 import remarkGfm from 'remark-gfm';
 import readingTime from 'reading-time';
-import type { FeedbackInsights } from './feedback';
+import type { FeedbackInsights }   from './feedback';
+import type { CompetitorInsights } from './competitors';
+import type { WeeklyExperiment }   from './brainstorm';
 
 export interface FAQItem {
   question: string;
@@ -63,10 +65,12 @@ Return ONLY the category name, nothing else.`;
  *   Call 2 — plain markdown content (no JSON wrapper)
  */
 export async function generatePost(
-  topic:           string,
-  category:        string,
-  insights?:       FeedbackInsights,
-  failureContext?: string,
+  topic:              string,
+  category:           string,
+  insights?:          FeedbackInsights,
+  failureContext?:    string,
+  competitors?:       CompetitorInsights | null,
+  weeklyExperiment?:  WeeklyExperiment | null,
 ): Promise<{ title: string; description: string; slug: string; markdown: string; tags: string[]; seoKeywords: string[]; faqs: FAQItem[] }> {
 
   const perfContext = insights?.hasData && insights.agentPromptCtx
@@ -75,47 +79,91 @@ export async function generatePost(
     ? `\nReal search queries from Google to weave in naturally:\n${insights.topSearchQueries.slice(0, 6).map((q) => `  - ${q}`).join('\n')}` : '';
   const retryContext = failureContext ? `\n${failureContext}\n` : '';
 
+  // Competitor intelligence block (injected when available)
+  const competitorCtx = competitors?.competitorContext
+    ? `\n\n${competitors.competitorContext}\n` : '';
+
+  // Weekly format experiment (injected when available)
+  const experimentCtx = weeklyExperiment?.promptAddition
+    ? `\n\n${weeklyExperiment.promptAddition}\n` : '';
+
+  // Dynamic word count target — use competitor-derived target or default
+  const wordCountTarget = competitors?.targetWordCount
+    ? `${competitors.targetWordCount}–${competitors.targetWordCount + 200}`
+    : '1,400–1,800';
+
   const contentRules = `
-BANNED PHRASES (Google Helpful Content penalty):
+BANNED PHRASES (Google Helpful Content + AI-detection penalty):
 ❌ "In today's digital landscape" / "Game changer" / "Skyrocket" / "Revolutionize"
 ❌ "In conclusion," / "To summarize," / "Navigate the" / "Embark on" / "Dive deep"
 ❌ "At the end of the day" / "Leverage your" / "It is important to note"
 ❌ Any vague filler with no specific insight
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AEO — ANSWER ENGINE OPTIMISATION
+(Getting cited in ChatGPT / Perplexity / Google AI Overviews)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 1 — DIRECT ANSWER BLOCK (mandatory, immediately after intro):
+Add a "## Quick Answer" section with 2–3 sentences that DIRECTLY answer
+the post's primary question. Format:
+## Quick Answer
+[Direct answer starting with the key fact or recommendation. Include at least
+one specific number. E.g.: "You can monetize a YouTube channel with 1,000
+subscribers and 4,000 watch hours — the threshold YouTube requires for the
+Partner Program. Most creators hit this in 6–18 months with consistent uploads."]
+
+RULE 2 — STATISTICS (5+ required):
+Every major claim needs a number. Format attributions for AI citation:
+• "According to YouTube's 2025 Partner Program data, channels need..."
+• "In Graphy's analysis of 50,000+ creators, those who..."
+• "Based on DataForSEO keyword data, '[keyword]' gets X monthly searches"
+Never invent numbers — use realistic industry estimates if needed and say "estimates suggest".
+
+RULE 3 — EXPERT ATTRIBUTION (critical for AEO):
+Write in first person as Sandeep Singh, Co-founder of Graphy.com. Use explicit
+attribution AI engines can quote:
+• "In my experience working with 50,000+ creators on Graphy..."
+• "What I've seen consistently among top-performing Graphy creators is..."
+• "My take after helping thousands of creators monetize their channels: [opinion]"
+This bylined authority is exactly what Perplexity and ChatGPT cite.
+
+RULE 4 — DEFINITION SENTENCES (one per H2):
+Start each H2 section with a direct definitional sentence that could stand
+alone as a search answer:
+• "YouTube Super Thanks is a feature that lets viewers pay $2–$50 to highlight
+  their comments on a video."
+• "A content calendar is a scheduling system that maps what you publish,
+  when you publish it, and on which platform."
+These 1-sentence definitions are prime AEO extraction targets.
+
+RULE 5 — STRUCTURED FAQ (bottom of post):
+Write 5 FAQ pairs in citation-ready format. Each answer must be:
+• Self-contained (understandable without reading the rest of the post)
+• Specific (include a number, timeframe, or concrete step)
+• Under 60 words
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 E-E-A-T REQUIREMENTS:
-- At least 2 first-person Graphy creator patterns ("The creators who..." / "Our data shows...")
-- Specific numbers in every section (%, $, timeframes, subscriber counts)
+- At least 2 first-person Graphy creator patterns with specific numbers
 - One "## What Most Creators Get Wrong About [Topic]" section
-- One "## Sandeep's Take" section with a direct personal opinion
+- One "## Sandeep's Take" section with a direct personal opinion + Graphy data
 - One step-by-step numbered action section
-- Blockquote Pro Tip per major section
 
-VISUAL RICHNESS REQUIREMENTS (mandatory — makes posts scannable and engaging):
-1. TABLES: Include at least 2 markdown comparison tables. Examples:
-   | Platform | Revenue Share | Min Payout | Best For |
-   |----------|--------------|------------|----------|
-   | YouTube  | 55%          | $100       | Long-form |
+VISUAL RICHNESS (mandatory — every post):
+1. At least 2 markdown comparison/data tables
+2. 2–3 <div class="stat-box">📊 [Stat] — [Source]</div> callouts
+3. 2–3 <div class="tip-box">💡 <strong>Pro Tip:</strong> [Tip]</div>
+4. One <div class="warning-box">⚠️ <strong>Watch out:</strong> [Mistake]</div>
+5. One <div class="callout-box">🎯 <strong>Key Insight:</strong> [Insight]</div>
 
-2. STAT CALLOUTS: Wrap key stats in this HTML (use 2–3 times):
-   <div class="stat-box">📊 Channels with consistent uploads earn <strong>3x more AdSense</strong> than irregular ones — YouTube Creator Academy, 2025</div>
+READABILITY:
+- Max 3 sentences per paragraph
+- **Bold** key terms, numbers, action words
+- Every H2 needs at least one visual element
 
-3. TIP BOXES: Use for standout Pro Tips (use 2–3 times):
-   <div class="tip-box">💡 <strong>Pro Tip:</strong> Your actionable tip here.</div>
-
-4. WARNING BOXES: Use once for the biggest mistake to avoid:
-   <div class="warning-box">⚠️ <strong>Watch out:</strong> Warning text here.</div>
-
-5. CALLOUT BOXES: Use once for a key mid-article insight:
-   <div class="callout-box">🎯 <strong>Key Insight:</strong> Insight text here.</div>
-
-READABILITY RULES:
-- Max 3 sentences per paragraph — no walls of text
-- Use **bold** for key terms, numbers, and action words
-- Every H2 section needs at least one visual element (table, box, or list)
-- Target 1,200–1,500 words — tight and punchy beats long and fluffy
-
-TONE: Direct, like texting a smart friend. Short sentences. "You" not "one".
-GRAPHY: Max 2 natural mentions as a solution, not an ad.`;
+TONE: Direct, like texting a smart friend. "You" not "one".
+GRAPHY: Max 2 natural mentions as a solution, never as an ad.
+LENGTH: ${wordCountTarget} words — beats competitors, earns AEO trust.`;
 
   // Determine post type from category for mission context injection
   const postType = category === 'AI for Creator Economy' ? 'ai' : 'bofu';
@@ -130,20 +178,21 @@ ${perfContext}
 Generate SEO metadata for a blog post about: "${topic}"
 Category: ${category}
 ${queryHints}
+${competitors ? `Primary keyword to optimise for: "${competitors.keyword}"` : ''}
 
 Return ONLY this JSON object (no markdown, no explanation):
 {
-  "title": "Compelling SEO title 50-60 chars with primary keyword",
-  "description": "Meta description 150-160 chars with keyword and clear benefit",
+  "title": "Compelling SEO title 50-60 chars — include primary keyword near the start",
+  "description": "Meta description 150-160 chars — keyword + specific benefit + credibility signal",
   "slug": "url-friendly-slug-with-hyphens",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
   "seo_keywords": ["primary keyword", "secondary 1", "secondary 2", "secondary 3"],
   "faqs": [
-    { "question": "Specific question a creator googles?", "answer": "Direct 2-3 sentence answer with specific detail." },
-    { "question": "How long does it take to [topic action]?", "answer": "Realistic timeframe with context." },
-    { "question": "What is the difference between X and Y related to ${topic}?", "answer": "Clear comparison." },
-    { "question": "Is [topic] worth it for small channels?", "answer": "Honest answer with numbers." },
-    { "question": "What are the biggest mistakes with [topic]?", "answer": "2-3 specific mistakes." }
+    { "question": "Specific question a creator googles about ${topic}?", "answer": "Direct 2-3 sentence answer — self-contained, includes a specific number or timeframe." },
+    { "question": "How long does it take to [key action from topic]?", "answer": "Realistic timeframe with what affects it." },
+    { "question": "What is the difference between X and Y [related to topic]?", "answer": "Clear comparison in 2 sentences." },
+    { "question": "Is [topic] worth it for small channels with under 5,000 subscribers?", "answer": "Honest answer with a specific threshold or number." },
+    { "question": "What are the biggest mistakes creators make with [topic]?", "answer": "2-3 specific, named mistakes." }
   ]
 }`;
 
@@ -166,13 +215,12 @@ Return ONLY this JSON object (no markdown, no explanation):
 
   // AI-specific extra rules for "AI for Creator Economy" posts
   const aiRules = category === 'AI for Creator Economy' ? `
-AI CATEGORY RULES (mandatory for this category):
+AI CATEGORY RULES (mandatory):
 - Start from a REAL creator problem (growing a channel, selling courses, saving time)
 - Show HOW AI solves that problem with SPECIFIC tools + step-by-step usage
 - Include a "## Before AI vs After AI" section with real numbers/comparisons
 - Mention at least 2 specific AI tools by name (ChatGPT, Gemini, ElevenLabs, Pictory, Descript, etc.)
 - End with an actionable AI workflow the reader can copy TODAY
-- AI-first angle — not "AI can help" but "here is EXACTLY how to use AI for this"
 - Every section must show concrete tool usage, not just theory
 ` : '';
 
@@ -181,6 +229,8 @@ AI CATEGORY RULES (mandatory for this category):
 You are Sandeep Singh, co-founder of Graphy.com — a platform trusted by 50,000+ creators.
 ${missionCtx}
 ${retryContext}
+${competitorCtx}
+${experimentCtx}
 
 Write a COMPLETE blog post in plain markdown about: "${topic}"
 Title: ${meta.title}
@@ -191,19 +241,20 @@ ${contentRules}
 ${aiRules}
 
 STRUCTURE (required):
-1. Opening hook — one punchy paragraph with a surprising stat or bold claim
-2. At least 5 ## H2 sections — each with a table OR stat-box OR tip-box
-3. One markdown comparison table in the first 2 sections
-4. "## What Most Creators Get Wrong About [specific aspect]" — include a warning-box
-5. "## Sandeep's Take" — 2–3 short paragraphs, direct opinion, no fluff
-6. One numbered step-by-step action section (use 1. 2. 3. format)
-7. One second comparison or data table anywhere in the post
-8. "## Key Takeaways" — 5 tight bullet points
-9. "## Frequently Asked Questions" — 5 Q&A pairs at the very end
+1. Opening hook — punchy paragraph with a surprising stat or bold claim
+2. "## Quick Answer" — 2–3 direct sentences answering the core question (AEO target)
+3. At least 5 ## H2 sections — each opens with a definition sentence, then detail
+4. One markdown comparison table in the first 2 sections
+5. "## What Most Creators Get Wrong About [specific aspect]" — include warning-box
+6. "## Sandeep's Take" — first-person opinion with Graphy data, 2–3 paragraphs
+7. One numbered step-by-step action section (1. 2. 3. format, each step is actionable)
+8. One second comparison or data table
+9. "## Key Takeaways" — 5 tight bullet points (each under 20 words)
+10. "## Frequently Asked Questions" — 5 Q&A pairs, answers self-contained + specific
 
-LENGTH: 1,200–1,500 words. Every sentence must add value.
+LENGTH: ${wordCountTarget} words. No padding — every sentence earns its place.
 
-Write the full markdown post now. Start directly with the opening paragraph — no title heading needed.`;
+Write the full markdown post now. Start with the opening paragraph (no title heading).`;
 
   const markdown = await ask(contentPrompt, 8192, 0.75);
 

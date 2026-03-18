@@ -41,6 +41,8 @@ import { generateTitleVariant }                                                 
 import { healPost }                                                                from './selfheal';
 import { checkKeywordHealth, escalateToSandeep }                                  from './escalate';
 import { pickTrendingCreatorTopic }                                                from './trends';
+import { analyzeCompetitors }                                                      from './competitors';
+import { getCurrentWeekExperiment }                                                from './brainstorm';
 
 export interface PostResult {
   slug:         string;
@@ -252,8 +254,22 @@ async function runBofuPost({
     const category = await classifyCategory(topic);
     console.log(`[Agent/BOFU] Category: ${category}`);
 
-    // 3. Generate post
-    let generated = await generatePost(topic, category, insights ?? undefined);
+    // 3a. Competition research (runs in parallel with nothing — non-blocking)
+    //     Gives Gemini real SERP data: who's ranking, what they cover, content gaps.
+    const [competitors, weeklyExperiment] = await Promise.all([
+      analyzeCompetitors(topic).catch((e) => {
+        console.warn('[Agent/BOFU] Competitor analysis failed (non-fatal):', e);
+        return null;
+      }),
+      Promise.resolve(getCurrentWeekExperiment()),
+    ]);
+    if (competitors) {
+      console.log(`[Agent/BOFU] Competitor analysis: targeting ${competitors.topDomains.slice(0, 3).join(', ')} | ${competitors.contentGaps.length} gaps found | target ${competitors.targetWordCount} words`);
+    }
+    console.log(`[Agent/BOFU] This week's format experiment: "${weeklyExperiment.format}"`);
+
+    // 3b. Generate post (with competitor intelligence + weekly format experiment)
+    let generated = await generatePost(topic, category, insights ?? undefined, undefined, competitors, weeklyExperiment);
     let { title, description, slug: rawSlug, tags, seoKeywords, faqs, markdown } = generated;
 
     if (title === topic || title === topic.toLowerCase()) {
@@ -267,7 +283,7 @@ async function runBofuPost({
     if (!qualityReport.passed) {
       console.log(`[Agent/BOFU] 🔄 Regenerating (score ${qualityReport.score}/100)...`);
       const failureContext = buildFailureContext(qualityReport, markdown);
-      const retry = await generatePost(topic, category, insights ?? undefined, failureContext);
+      const retry = await generatePost(topic, category, insights ?? undefined, failureContext, competitors, weeklyExperiment);
       const retryQuality = checkContentQuality(retry.markdown, retry.title, retry.seoKeywords[0] ?? topic);
 
       if (retryQuality.score > qualityReport.score) {
