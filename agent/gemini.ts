@@ -61,11 +61,12 @@ export async function generateImagePrompt(
   category: string,
 ): Promise<string> {
   const categoryStyle: Record<string, string> = {
-    'YouTube Monetization': 'modern YouTube studio, camera equipment, bright ring light, creative workspace with screens showing analytics',
-    'Course Creation':       'clean desk with laptop, notebook, and coffee, online learning aesthetic, soft natural light',
-    'Creator Growth':        'rising chart, social media analytics dashboard, vibrant colors, digital growth visualization',
-    'Content Strategy':      'content planning board, sticky notes, calendar, strategic planning workspace',
-    'AI for Creators':       'glowing neural network, futuristic digital art workspace, AI holographic interface',
+    'YouTube Monetization':   'modern YouTube studio, camera equipment, bright ring light, creative workspace with screens showing analytics',
+    'Course Creation':         'clean desk with laptop, notebook, and coffee, online learning aesthetic, soft natural light',
+    'Creator Growth':          'rising chart, social media analytics dashboard, vibrant colors, digital growth visualization',
+    'Content Strategy':        'content planning board, sticky notes, calendar, strategic planning workspace',
+    'AI for Creators':         'glowing neural network, futuristic digital art workspace, AI holographic interface',
+    'AI for Creator Economy':  'creator at laptop with AI assistant overlay, neural network data streams, vibrant purple-cyan gradient, futuristic-yet-human workspace',
   };
 
   const style = categoryStyle[category] ?? 'modern digital creator workspace, laptop, clean minimal aesthetic';

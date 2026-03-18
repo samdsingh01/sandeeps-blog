@@ -86,12 +86,19 @@ export async function GET(request: NextRequest) {
   const testPrompt = 'A simple blue circle on a white background.';
   const modelTests: Array<{ model: string; endpoint: string; status: number | null; hasImage: boolean; error: string | null }> = [];
 
-  // generateContent models (Gemini 2.0 Flash image gen)
-  for (const model of [
-    'gemini-2.0-flash-exp-image-generation',  // ← correct name
-    'gemini-2.0-flash-exp',                   // generic flash (no image gen)
-    'gemini-2.0-flash-preview-image-generation', // old name — expect 404
-  ]) {
+  // generateContent models — test a broad range; the working text model is
+  // gemini-2.5-flash so we include it plus every known image-gen variant.
+  // Also include any image-capable models found via ListModels above.
+  const generateContentModels = [
+    ...imageCapableModels.filter((m: string) => !m.includes('imagen')), // runtime-discovered
+    'gemini-2.0-flash',                          // stable Flash (Feb 2025)
+    'gemini-2.0-flash-exp',                      // experimental Flash
+    'gemini-2.0-flash-exp-image-generation',     // dedicated image-gen variant
+    'gemini-2.0-flash-preview-image-generation', // preview name
+    'gemini-1.5-flash',                          // older, widely available
+  ].filter((m: string, i: number, arr: string[]) => arr.indexOf(m) === i); // deduplicate
+
+  for (const model of generateContentModels) {
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -119,7 +126,13 @@ export async function GET(request: NextRequest) {
   }
 
   // predict models (Imagen 3 — different endpoint and request format)
-  for (const model of ['imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001']) {
+  const predictModels = [
+    ...imageCapableModels.filter((m: string) => m.includes('imagen')), // runtime-discovered
+    'imagen-3.0-generate-002',
+    'imagen-3.0-fast-generate-001',
+  ].filter((m: string, i: number, arr: string[]) => arr.indexOf(m) === i);
+
+  for (const model of predictModels) {
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,

@@ -221,6 +221,68 @@ function buildFigureHtml(src: string, alt: string): string {
 </figure>`;
 }
 
+// ── Gemini model auto-discovery ───────────────────────────────────────────────
+
+/**
+ * Cached list of image-capable Gemini models discovered via ListModels.
+ * Resets on each cold start (fine for Vercel serverless), prevents
+ * repeated API calls within a single invocation.
+ */
+let _cachedImageModels: string[] | null = null;
+
+/**
+ * Query the Gemini ListModels endpoint and return the names of models that
+ * (a) support generateContent AND (b) have "image" or "imagen" in their name
+ *     OR support responseModalities with IMAGE.
+ *
+ * Returns an empty array on any error — callers fall back to hardcoded names.
+ */
+async function discoverImageModels(apiKey: string): Promise<string[]> {
+  if (_cachedImageModels !== null) return _cachedImageModels;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=200`,
+      { signal: AbortSignal.timeout(8_000) }
+    );
+    if (!res.ok) { _cachedImageModels = []; return []; }
+
+    const data = await res.json() as { models?: Array<{
+      name: string;
+      supportedGenerationMethods?: string[];
+      description?: string;
+    }> };
+
+    const all = data.models ?? [];
+    const imageModels = all
+      .filter((m) => {
+        const name = (m.name ?? '').toLowerCase();
+        // Include models that are explicitly image-generation capable
+        return (name.includes('image') || name.includes('imagen')) &&
+               m.supportedGenerationMethods?.includes('generateContent');
+      })
+      .map((m) => m.name.replace('models/', ''));
+
+    // Also include flash models that support generateContent — they may support
+    // responseModalities IMAGE even if their name doesn't say "image"
+    const flashModels = all
+      .filter((m) => {
+        const name = (m.name ?? '').toLowerCase();
+        return name.includes('flash') && m.supportedGenerationMethods?.includes('generateContent');
+      })
+      .map((m) => m.name.replace('models/', ''));
+
+    _cachedImageModels = [...new Set([...imageModels, ...flashModels])];
+    if (_cachedImageModels.length > 0) {
+      console.log(`[Images] Discovered models: ${_cachedImageModels.join(', ')}`);
+    }
+    return _cachedImageModels;
+  } catch {
+    _cachedImageModels = [];
+    return [];
+  }
+}
+
 // ── Gemini image generation (REST API) ───────────────────────────────────────
 
 /**
@@ -247,10 +309,20 @@ async function generateAndStoreGeminiImage(
   let mimeType = 'image/png';
   let lastError = '';
 
-  // ── Attempt 1: Gemini 2.0 Flash image generation (generateContent) ────────
-  // Correct model name: gemini-2.0-flash-exp-image-generation
-  // (NOT flash-exp, NOT flash-preview-image-generation — those are 404)
-  const geminiModels = ['gemini-2.0-flash-exp-image-generation'];
+  // ── Attempt 1: Gemini image generation (generateContent) ─────────────────
+  // We try a broad set of model names because availability varies by API key project.
+  // The confirmed working text model for this key is gemini-2.5-flash, so we try
+  // newer models first (2.5, 2.0-flash), then the dedicated image-gen variants.
+  // Auto-discovery: if ListModels reveals additional image-capable models, we use those too.
+  const discoveredModels = await discoverImageModels(apiKey);
+  const geminiModels = [
+    ...discoveredModels, // runtime-discovered models take priority
+    'gemini-2.0-flash',                          // stable 2.0 Flash (released Feb 2025)
+    'gemini-2.0-flash-exp',                      // experimental 2.0 Flash
+    'gemini-2.0-flash-exp-image-generation',     // dedicated image-gen variant
+    'gemini-2.0-flash-preview-image-generation', // preview name
+    'gemini-1.5-flash',                          // 1.5 Flash (older but widely available)
+  ].filter((m, i, arr) => arr.indexOf(m) === i); // deduplicate
 
   for (const model of geminiModels) {
     try {
