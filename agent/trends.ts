@@ -72,6 +72,7 @@ export async function getTrendingTopics(): Promise<TrendingTopic[]> {
 async function getInterestScore(keyword: string): Promise<number> {
   try {
     // Google Trends "Interest over time" — token fetch then data fetch
+    // 6-second timeout per request — Trends is unreliable from Vercel
     const tokenRes = await fetch(
       `https://trends.google.com/trends/api/explore?hl=en-US&tz=-330&req=${encodeURIComponent(
         JSON.stringify({
@@ -80,7 +81,7 @@ async function getInterestScore(keyword: string): Promise<number> {
           property: '',
         })
       )}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6_000) }
     );
 
     const tokenText = await tokenRes.text();
@@ -93,7 +94,7 @@ async function getInterestScore(keyword: string): Promise<number> {
       `https://trends.google.com/trends/api/widgetdata/multiline?hl=en-US&tz=-330&req=${encodeURIComponent(
         JSON.stringify({ time: 'today 7-d', resolution: 'DAY', locale: 'en-US', comparisonItem: [{ geo: {}, complexKeywordsRestriction: { keyword: [{ type: 'BROAD', value: keyword }] } }], requestOptions: { property: '', backend: 'IZG', category: 0 } })
       )}&token=${token}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6_000) }
     );
 
     const dataText = await dataRes.text();
@@ -123,7 +124,7 @@ export async function getRelatedTrendingQueries(seed = 'youtube monetization'): 
           property: '',
         })
       )}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8_000) }
     );
 
     const tokenText = await tokenRes.text();
@@ -135,7 +136,7 @@ export async function getRelatedTrendingQueries(seed = 'youtube monetization'): 
       `https://trends.google.com/trends/api/widgetdata/relatedsearches?hl=en-US&tz=-330&req=${encodeURIComponent(
         JSON.stringify({ restriction: { geo: {}, time: 'today 3-m', complexKeywordsRestriction: { keyword: [{ type: 'BROAD', value: seed }] } }, keywordType: 'QUERY', metric: ['TOP', 'RISING'], trendinessSettings: { compareTime: '2024-12-13 2025-03-13' }, requestOptions: { property: '', backend: 'IZG', category: 0 }, language: 'en' })
       )}&token=${relatedToken}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8_000) }
     );
 
     const dataText = await dataRes.text();

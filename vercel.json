@@ -6,6 +6,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path":     "/api/agent/run-tofu",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path":     "/api/agent/report",
       "schedule": "0 9 * * *"
     },

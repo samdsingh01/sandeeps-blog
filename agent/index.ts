@@ -68,12 +68,13 @@ export interface AgentRunResult {
 }
 
 /**
- * Run the full dual-post content generation pipeline.
+ * Run the BOFU (keyword-driven) post generation pipeline.
  * Called daily by Vercel Cron at 08:00 UTC.
  *
- * Produces 2 posts per run:
- *   - Post 1 (BOFU): keyword-driven, high commercial intent, Graphy CTA
- *   - Post 2 (TOFU): trend-based, creator economy analysis, top-of-funnel traffic
+ * NOTE: TOFU (trend-based) posts run separately via /api/agent/run-tofu
+ * at 12:00 UTC. They were split because BOFU takes 3-4 minutes and the
+ * combined run was hitting the 5-minute Vercel maxDuration — TOFU was
+ * silently timing out and never being written.
  */
 export async function runAgent(): Promise<AgentRunResult> {
   const startTime = Date.now();
@@ -99,34 +100,23 @@ export async function runAgent(): Promise<AgentRunResult> {
       console.log('[Agent] No GSC feedback yet — running without performance context');
     }
 
-    // ── 1. Get all existing slugs (shared by both posts) ─────────────────────
+    // ── 1. Get all existing slugs ─────────────────────────────────────────────
     const { data: existing } = await db.from('posts').select('slug, title');
     const existingSlugs = (existing ?? []).map((r: { slug: string }) => r.slug);
     console.log(`[Agent] Found ${existingSlugs.length} existing posts`);
 
     // ════════════════════════════════════════════════════════════════════════
-    // POST 1 — BOFU (keyword-driven, bottom-of-funnel)
+    // BOFU post (keyword-driven, bottom-of-funnel)
     // ════════════════════════════════════════════════════════════════════════
     console.log('[Agent] ── Starting BOFU post (keyword-driven) ────────────────');
     const bofuResult = await runBofuPost({ db, existingSlugs, insights });
     if (bofuResult) {
       results.push(bofuResult);
-      existingSlugs.push(bofuResult.slug); // prevent TOFU slug collision
       console.log(`[Agent] ✅ BOFU done: "${bofuResult.title}" (${bofuResult.qualityScore}/100, ${bofuResult.status})`);
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // POST 2 — TOFU (trend-based, top-of-funnel)
-    // ════════════════════════════════════════════════════════════════════════
-    console.log('[Agent] ── Starting TOFU post (trend-based) ──────────────────');
-    const tofuResult = await runTofuPost({ db, existingSlugs });
-    if (tofuResult) {
-      results.push(tofuResult);
-      console.log(`[Agent] ✅ TOFU done: "${tofuResult.title}" (${tofuResult.qualityScore}/100, ${tofuResult.status})`);
-    }
-
     const durationMs = Date.now() - startTime;
-    console.log(`[Agent] 🏁 Run complete — ${results.length} posts in ${durationMs}ms`);
+    console.log(`[Agent] 🏁 BOFU run complete in ${durationMs}ms`);
 
     await logRun({
       runType:    'content_generation',
@@ -135,23 +125,22 @@ export async function runAgent(): Promise<AgentRunResult> {
       details:    {
         postsPublished: results.length,
         bofuSlug:       bofuResult?.slug,
-        tofuSlug:       tofuResult?.slug,
         hadInsights,
+        note:           'TOFU runs separately at 12:00 UTC via /api/agent/run-tofu',
       },
       durationMs,
     });
 
-    const primary = bofuResult ?? tofuResult;
     return {
       success:      true,
-      postSlug:     primary?.slug,
-      title:        primary?.title,
+      postSlug:     bofuResult?.slug,
+      title:        bofuResult?.title,
       hadInsights,
-      qualityScore: primary?.qualityScore,
-      status:       primary?.status,
+      qualityScore: bofuResult?.qualityScore,
+      status:       bofuResult?.status,
       posts:        results,
       bofuPost:     bofuResult ?? undefined,
-      tofuPost:     tofuResult ?? null,
+      tofuPost:     null,
     };
 
   } catch (err) {
@@ -159,36 +148,85 @@ export async function runAgent(): Promise<AgentRunResult> {
     const durationMs = Date.now() - startTime;
     console.error('[Agent] ❌ Fatal error:', error);
 
-    // Escalate critical failures to Sandeep
     await escalateToSandeep({
       trigger:  'DB or API failures that block the run (agent can\'t complete)',
-      action:   'Daily dual-post agent run',
+      action:   'Daily BOFU agent run',
       details:  { error, partialResults: results.length, durationMs },
       skipPost: false,
     }).catch(() => {/* non-fatal */});
 
-    await logRun({
-      runType:    'content_generation',
-      status:     'error',
-      error,
-      durationMs,
-    });
+    await logRun({ runType: 'content_generation', status: 'error', error, durationMs });
 
-    // Return partial success if we got at least 1 post
     if (results.length > 0) {
       const primary = results[0];
       return {
-        success:   true, // partial success
-        postSlug:  primary.slug,
-        title:     primary.title,
-        hadInsights,
-        qualityScore: primary.qualityScore,
-        status:    primary.status,
-        posts:     results,
-        error:     `Partial success (${results.length} post(s)): ${error}`,
+        success: true, postSlug: primary.slug, title: primary.title,
+        hadInsights, qualityScore: primary.qualityScore, status: primary.status,
+        posts: results, error: `Partial success: ${error}`,
       };
     }
 
+    return { success: false, error };
+  }
+}
+
+/**
+ * Run the TOFU (trend-based) post generation pipeline.
+ * Called separately at 12:00 UTC via /api/agent/run-tofu.
+ *
+ * Split from runAgent() so each has a full 5-minute Vercel window.
+ */
+export async function runTofuOnly(): Promise<AgentRunResult> {
+  const startTime = Date.now();
+  const db = getServiceClient();
+
+  try {
+    const { data: existing } = await db.from('posts').select('slug');
+    const existingSlugs = (existing ?? []).map((r: { slug: string }) => r.slug);
+    console.log(`[Agent/TOFU] ${existingSlugs.length} existing posts loaded`);
+
+    console.log('[Agent] ── Starting TOFU post (trend-based) ──────────────────');
+    const tofuResult = await runTofuPost({ db, existingSlugs });
+
+    const durationMs = Date.now() - startTime;
+
+    if (tofuResult) {
+      console.log(`[Agent] ✅ TOFU done: "${tofuResult.title}" (${tofuResult.qualityScore}/100, ${tofuResult.status}) in ${durationMs}ms`);
+      await logRun({
+        runType:    'content_generation',
+        status:     'success',
+        postSlug:   tofuResult.slug,
+        details:    { tofuSlug: tofuResult.slug, qualityScore: tofuResult.qualityScore },
+        durationMs,
+      });
+      return {
+        success:      true,
+        postSlug:     tofuResult.slug,
+        title:        tofuResult.title,
+        qualityScore: tofuResult.qualityScore,
+        status:       tofuResult.status,
+        posts:        [tofuResult],
+        tofuPost:     tofuResult,
+      };
+    }
+
+    console.warn('[Agent/TOFU] No TOFU post produced (topic escalated or unavailable)');
+    await logRun({ runType: 'content_generation', status: 'skipped', details: { reason: 'TOFU topic not available' }, durationMs });
+    return { success: true, skipped: true, reason: 'TOFU topic escalated or unavailable' };
+
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    const durationMs = Date.now() - startTime;
+    console.error('[Agent/TOFU] ❌ Fatal error:', error);
+
+    await escalateToSandeep({
+      trigger:  'DB or API failures that block the run (agent can\'t complete)',
+      action:   'Daily TOFU agent run',
+      details:  { error, durationMs },
+      skipPost: false,
+    }).catch(() => {/* non-fatal */});
+
+    await logRun({ runType: 'content_generation', status: 'error', error, durationMs });
     return { success: false, error };
   }
 }
