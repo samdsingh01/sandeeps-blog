@@ -116,33 +116,36 @@ export async function generateContentImages(
   // Build prompts + generate images in parallel
   const results = await Promise.all(picks.map(async ({ index, heading }) => {
     try {
-      // Ask Gemini for a section-specific visual concept
+      // Ask Gemini for a rich, section-specific visual prompt
       const prompt = await askFast(
-        `You are a visual art director for a creator economy blog.
-Write a SHORT image generation prompt (max 60 words) for a CONCEPT ILLUSTRATION inside a blog post.
+        `You are a world-class visual art director for a creator economy publication.
+Write a HIGHLY SPECIFIC image generation prompt for an inline concept illustration inside a blog post.
 
-Post topic: "${topic}"
-This section heading: "${heading}"
-Category: ${category}
+POST TITLE: "${topic}"
+SECTION HEADING: "${heading}"
+CATEGORY: ${category}
 
-Requirements:
-- Conceptual, educational illustration (not a generic stock photo)
-- Shows the KEY IDEA of the section visually (diagram, metaphor, realistic scene)
-- No text, no words, no letters anywhere in the image
-- Clean, modern, professional style
-- Wide format (16:9)
+Your prompt must:
+1. Visually represent the SPECIFIC idea in the section heading — not the general topic
+   - e.g. "Setting Up Super Thanks" → YouTube donation button glowing on screen, creator celebrating, coins/stars animation
+   - e.g. "Building Your Email List" → email inbox filling up with subscriber notifications, magnet metaphor, dashboard
+   - e.g. "Using AI to Write Scripts" → AI chat interface open alongside video script, split-screen workflow
+2. Name exact objects, composition, and setting (2–3 sentences)
+3. Specify lighting and color mood that matches the section's energy
+4. Style: photorealistic photography OR clean 3D render — whichever fits better
+5. End with: "No text, no words, no letters, no UI labels in the image. 16:9 wide format."
 
-Return ONLY the image prompt, nothing else.`,
-        150,
-        0.75,
+Return ONLY the image prompt (80–120 words). No explanations, no preamble.`,
+        300,
+        0.85,
       );
 
       const storageKey = `${slug}-section-${index}`;
       console.log(`[Images] section prompt for "${heading}": "${prompt.slice(0, 60)}..."`);
 
-      // Try Gemini image generation first
+      // Try Gemini image generation first (inline type = no "blog cover" framing)
       try {
-        const url = await generateAndStoreGeminiImage(prompt.trim(), storageKey);
+        const url = await generateAndStoreGeminiImage(prompt.trim(), storageKey, 'inline');
         if (url) {
           console.log(`[Images] ✅ inline image ${index}: ${url.slice(0, 80)}`);
           return { h2Index: index, heading, imageUrl: url } satisfies ContentImage;
@@ -300,11 +303,25 @@ async function discoverImageModels(apiKey: string): Promise<string[]> {
 async function generateAndStoreGeminiImage(
   prompt:     string,
   storageKey: string,
+  imageType:  'cover' | 'inline' = 'cover',
 ): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
-  const fullPrompt = `Create a professional blog cover image. No text, no words, no letters anywhere. ${prompt}`;
+  // Different framing for cover vs. inline section images
+  const fullPrompt = imageType === 'cover'
+    ? [
+        'Ultra-high quality professional blog cover image, 16:9 wide aspect ratio, photorealistic or cinematic 3D render.',
+        prompt,
+        'CRITICAL: Absolutely NO text, NO words, NO letters, NO numbers, NO logos, NO watermarks anywhere in the image.',
+        'Sharp focus on key elements, professional color grading, magazine-cover quality composition.',
+      ].join(' ')
+    : [
+        'High quality inline concept illustration for a blog article, 16:9 wide format.',
+        prompt,
+        'CRITICAL: Absolutely NO text, NO words, NO letters, NO numbers, NO labels, NO UI copy visible anywhere.',
+        'Clear focal point, contextually relevant to the section topic, clean professional style.',
+      ].join(' ');
   let b64: string | null = null;
   let mimeType = 'image/png';
   let lastError = '';
@@ -467,14 +484,20 @@ function hashCode(str: string): number {
 
 function buildFallbackPrompt(topic: string, category: string): string {
   const map: Record<string, string> = {
-    'YouTube Monetization': `YouTube creator studio setup for "${topic}", camera, ring light, analytics on screen, cinematic 16:9`,
-    'Course Creation':       `Clean desk workspace for "${topic}", laptop with course slides, notebook, coffee, minimal aesthetic`,
-    'Creator Growth':        `Rising analytics dashboard for "${topic}", social graphs, vibrant blue-purple gradient, tech aesthetic`,
-    'Content Strategy':      `Content planning board for "${topic}", sticky notes, calendar, strategy map, professional workspace`,
-    'AI for Creators':           `Futuristic AI interface for "${topic}", neural network glow, holographic display, dark gradient`,
-    'AI for Creator Economy':    `Futuristic AI tools interface for "${topic}", creator at laptop with AI overlay, data streams, vibrant purple-cyan gradient`,
+    'YouTube Monetization':
+      `Professional YouTube creator studio, mirrorless camera on tripod with LED ring light, dual monitors showing subscriber growth charts and AdSense revenue for "${topic}", softbox lighting casting warm amber glow, shallow depth of field, cinematic photography, dark charcoal background with YouTube red accents, no text no words no letters`,
+    'Course Creation':
+      `Minimal creative workspace for an online course about "${topic}", open laptop showing slide deck, moleskine notebook with pen, ceramic coffee cup, USB microphone, soft natural window light, overhead flat-lay composition, clean whites and warm wood tones, sage green plant, lifestyle product photography, no text no words no letters`,
+    'Creator Growth':
+      `Glowing 3D holographic analytics dashboard visualizing growth metrics for "${topic}", upward-trending graphs as luminous neon lines, interconnected social platform spheres rising, electric blue to violet gradient background, volumetric light rays, futuristic data visualization art, Behance aesthetic, no text no words no letters`,
+    'Content Strategy':
+      `Strategic content planning setup for "${topic}", large color-coded wall calendar, sticky notes arranged in a funnel shape, open strategy notebook, laptop showing editorial calendar, warm amber and coral color palette, flat-lay top-down photography, editorial magazine aesthetic, no text no words no letters`,
+    'AI for Creators':
+      `Futuristic AI-augmented creative workspace inspired by "${topic}", holographic neural network nodes floating above a laptop, abstract data streams in magenta and electric cyan, creative tools (camera, microphone, pen tablet) intertwined with glowing digital circuits, deep purple to teal gradient, cinematic sci-fi 3D render, volumetric lighting, no text no words no letters`,
+    'AI for Creator Economy':
+      `AI-powered creator economy workspace for "${topic}", translucent AI interface overlay on creator workstation with multiple screens, glowing neural pathways connecting creative tools, floating revenue projection charts, vibrant purple-to-gold gradient, high-end 3D render and photography composite, cinematic lighting, Wired magazine cover aesthetic, no text no words no letters`,
   };
-  return map[category] ?? `Professional blog cover for "${topic}", modern digital creator workspace, clean and vibrant, 16:9`;
+  return map[category] ?? `Ultra-high quality professional blog cover for "${topic}", modern premium creator workspace, dramatic cinematic lighting, rich color palette with bold accent, sharp composition, photorealistic, 16:9, no text no words no letters`;
 }
 
 function slugifyTopic(topic: string): string {

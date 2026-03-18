@@ -53,38 +53,106 @@ export async function askFast(
 }
 
 /**
- * Generate a detailed, visual image prompt for blog cover art.
+ * Generate a rich, specific image prompt for blog cover art.
  * Used by images.ts to create topic-relevant AI-generated covers.
+ *
+ * Prompt strategy:
+ *  - Extracts the core subject matter from the post topic
+ *  - Combines category-specific visual language with topic-specific objects
+ *  - Specifies lighting, composition, color palette, and photographic style
+ *  - Explicitly bans text/faces/logos to keep images clean and professional
  */
 export async function generateImagePrompt(
   topic: string,
   category: string,
 ): Promise<string> {
-  const categoryStyle: Record<string, string> = {
-    'YouTube Monetization':   'modern YouTube studio, camera equipment, bright ring light, creative workspace with screens showing analytics',
-    'Course Creation':         'clean desk with laptop, notebook, and coffee, online learning aesthetic, soft natural light',
-    'Creator Growth':          'rising chart, social media analytics dashboard, vibrant colors, digital growth visualization',
-    'Content Strategy':        'content planning board, sticky notes, calendar, strategic planning workspace',
-    'AI for Creators':         'glowing neural network, futuristic digital art workspace, AI holographic interface',
-    'AI for Creator Economy':  'creator at laptop with AI assistant overlay, neural network data streams, vibrant purple-cyan gradient, futuristic-yet-human workspace',
+  const categoryContext: Record<string, {
+    scene:   string;
+    objects: string;
+    mood:    string;
+    palette: string;
+    style:   string;
+  }> = {
+    'YouTube Monetization': {
+      scene:   'professional YouTube creator studio',
+      objects: 'mirrorless camera on tripod, LED ring light, dual monitors showing analytics dashboards, AdSense revenue charts, microphone, softbox lighting, subscriber count milestone plaque on wall',
+      mood:    'aspirational, focused, entrepreneurial energy',
+      palette: 'warm amber and deep red accents on dark charcoal background, YouTube red highlights',
+      style:   'cinematic photography, shallow depth of field, f/1.8 bokeh on background equipment',
+    },
+    'Course Creation': {
+      scene:   'minimal creative workspace for online course production',
+      objects: 'open laptop with course slide visible on screen, moleskine notebook with pen, ceramic coffee cup, USB microphone, external monitor showing video timeline, course completion badge, soft plants',
+      mood:    'focused, calm, productive, knowledgeable',
+      palette: 'clean whites, warm wood tones, sage green accents, soft natural window light',
+      style:   'lifestyle product photography, overhead or 45-degree angle, crisp and airy',
+    },
+    'Creator Growth': {
+      scene:   'dynamic data visualization and growth dashboard',
+      objects: 'glowing holographic growth charts, follower count rising, interconnected social platform icons as 3D spheres, upward trending graphs with vibrant glow, digital analytics interface',
+      mood:    'momentum, optimism, breakthrough, scaling energy',
+      palette: 'electric blue to violet gradient, neon accent lines, dark navy background with glowing data elements',
+      style:   '3D render, futuristic UI design, volumetric lighting, Behance digital art aesthetic',
+    },
+    'Content Strategy': {
+      scene:   'strategic content planning command center',
+      objects: 'large wall-mounted content calendar with color-coded posts, sticky notes arranged in a funnel diagram, open strategy notebook, laptop showing content pipeline, coffee, pens scattered purposefully',
+      mood:    'methodical, strategic, organized creative chaos',
+      palette: 'warm cream and burnt orange, coral accents, kraft paper textures, bright natural light',
+      style:   'editorial flat-lay photography, top-down composition, warm color grading',
+    },
+    'AI for Creators': {
+      scene:   'futuristic AI-augmented creative workspace',
+      objects: 'holographic AI interface floating above a laptop, neural network nodes as glowing orbs, abstract data streams, creative tools (camera, pen, microphone) intertwined with digital circuits',
+      mood:    'innovative, empowering, human creativity amplified by AI',
+      palette: 'deep purple to electric cyan gradient, magenta accent glows, dark background with luminous AI elements',
+      style:   'cinematic sci-fi 3D concept art, volumetric light rays, Blade Runner aesthetic meets creator economy',
+    },
+    'AI for Creator Economy': {
+      scene:   'AI-powered creator economy command center',
+      objects: 'creator at workstation with translucent AI assistant interface overlay, floating analytics and revenue projections, AI-generated content previews on multiple screens, glowing neural pathways connecting tools',
+      mood:    'transformative, empowering, next-generation creator tools',
+      palette: 'vibrant purple-to-teal gradient, golden AI highlights, dark rich background, luminous data flows',
+      style:   'high-end 3D render + photography composite, cinematic lighting, Wired magazine cover aesthetic',
+    },
   };
 
-  const style = categoryStyle[category] ?? 'modern digital creator workspace, laptop, clean minimal aesthetic';
+  const ctx = categoryContext[category] ?? {
+    scene:   'modern digital creator workspace',
+    objects: 'laptop, premium desk setup, creative tools, soft ambient lighting',
+    mood:    'professional, focused, aspirational',
+    palette: 'clean neutrals with one bold accent color',
+    style:   'professional photography, shallow depth of field',
+  };
 
   const prompt = await askFast(
-    `You are a visual art director creating cover images for a creator economy blog.
-Write a single detailed image generation prompt (under 80 words) for a blog post titled: "${topic}"
+    `You are a world-class visual art director for a top creator economy publication.
+Your job: write a HIGHLY SPECIFIC, VIVID image generation prompt for a blog post cover.
 
-The image should be: ${style}
-Style: professional photography or 3D render, vibrant but clean, high-contrast, suitable as a wide blog header (16:9 ratio)
-No text in the image. No people's faces. Focus on objects, workspace, technology, and mood.
+POST TITLE: "${topic}"
+CATEGORY: ${category}
 
-Return ONLY the image prompt. No quotes, no preamble.`,
-    200,
-    0.8,
+SCENE CONTEXT: ${ctx.scene}
+KEY OBJECTS TO INCLUDE: ${ctx.objects}
+MOOD/ENERGY: ${ctx.mood}
+COLOR PALETTE: ${ctx.palette}
+PHOTOGRAPHIC/ART STYLE: ${ctx.style}
+
+YOUR TASK:
+Write a single image generation prompt (120–160 words) that:
+1. Opens with the primary subject and scene — make it SPECIFIC to the post title (e.g. for "1000 subscribers monetization" include a milestone screen showing "1K subscribers", for "Canva for YouTube" show Canva interface visible on screen)
+2. Describes exact objects, their arrangement, and key visual details
+3. Specifies lighting (direction, quality, color temperature)
+4. Names the color palette explicitly (e.g. "warm amber tones with deep red accents")
+5. States the photographic/art style and technical details (lens, render style, composition)
+6. Ends with: "No text, no words, no letters, no logos anywhere in the image. No human faces."
+
+Return ONLY the image prompt. No explanations, no quotes, no preamble.`,
+    350,
+    0.85,
   );
 
-  return prompt.trim().replace(/^["']|["']$/g, ''); // strip surrounding quotes if any
+  return prompt.trim().replace(/^["']|["']$/g, '');
 }
 
 /**
