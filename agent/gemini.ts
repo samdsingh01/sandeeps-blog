@@ -66,89 +66,84 @@ export async function generateImagePrompt(
   topic: string,
   category: string,
 ): Promise<string> {
+  // ── Category → illustration style guide ──────────────────────────────────
+  // These prompts are designed for the RIGHT PANEL of a split editorial card.
+  // The image sits on the right 40% of the cover; the left panel has the title.
+  // Key requirements: clean focal element, works with gradient overlay on left edge,
+  // bold colours that pop against a dark background, no busy full-scene chaos.
   const categoryContext: Record<string, {
-    scene:   string;
-    objects: string;
-    mood:    string;
-    palette: string;
-    style:   string;
+    subject: string;   // the main visual subject (1 clear focal element)
+    style:   string;   // rendering style
+    palette: string;   // colours
+    mood:    string;   // energy / feeling
   }> = {
     'YouTube Monetization': {
-      scene:   'professional YouTube creator studio',
-      objects: 'mirrorless camera on tripod, LED ring light, dual monitors showing analytics dashboards, AdSense revenue charts, microphone, softbox lighting, subscriber count milestone plaque on wall',
-      mood:    'aspirational, focused, entrepreneurial energy',
-      palette: 'warm amber and deep red accents on dark charcoal background, YouTube red highlights',
-      style:   'cinematic photography, shallow depth of field, f/1.8 bokeh on background equipment',
+      subject: 'a bold 3D YouTube play button trophy or a stylised creator setup with a ring-light and camera facing the viewer — clean and iconic, centred on a dark background',
+      style:   'high-end 3D product render, studio lighting, glossy surface reflections',
+      palette: 'YouTube red (#FF0000), bright white, deep charcoal background',
+      mood:    'achievement, aspiration, monetisation milestone',
     },
     'Course Creation': {
-      scene:   'minimal creative workspace for online course production',
-      objects: 'open laptop with course slide visible on screen, moleskine notebook with pen, ceramic coffee cup, USB microphone, external monitor showing video timeline, course completion badge, soft plants',
-      mood:    'focused, calm, productive, knowledgeable',
-      palette: 'clean whites, warm wood tones, sage green accents, soft natural window light',
-      style:   'lifestyle product photography, overhead or 45-degree angle, crisp and airy',
+      subject: 'a sleek 3D laptop or tablet floating at a slight angle, screen showing a clean modern course interface with colourful module cards and a progress bar',
+      style:   'clean 3D illustration, isometric or slight perspective, soft shadows',
+      palette: 'rich purple (#8b5cf6), white screen glow, dark navy background',
+      mood:    'education, empowerment, digital learning',
     },
     'Creator Growth': {
-      scene:   'dynamic data visualization and growth dashboard',
-      objects: 'glowing holographic growth charts, follower count rising, interconnected social platform icons as 3D spheres, upward trending graphs with vibrant glow, digital analytics interface',
-      mood:    'momentum, optimism, breakthrough, scaling energy',
-      palette: 'electric blue to violet gradient, neon accent lines, dark navy background with glowing data elements',
-      style:   '3D render, futuristic UI design, volumetric lighting, Behance digital art aesthetic',
+      subject: 'a bold upward-trending bar chart or rocket ship launching, rendered as a clean 3D geometric illustration with glowing data elements floating around it',
+      style:   'modern 3D render, bold geometric shapes, vibrant neon glow on dark bg',
+      palette: 'electric blue (#3b82f6) to cyan, glowing gold accents, dark background',
+      mood:    'momentum, scale, growth breakthrough',
     },
     'Content Strategy': {
-      scene:   'strategic content planning command center',
-      objects: 'large wall-mounted content calendar with color-coded posts, sticky notes arranged in a funnel diagram, open strategy notebook, laptop showing content pipeline, coffee, pens scattered purposefully',
-      mood:    'methodical, strategic, organized creative chaos',
-      palette: 'warm cream and burnt orange, coral accents, kraft paper textures, bright natural light',
-      style:   'editorial flat-lay photography, top-down composition, warm color grading',
+      subject: 'a stylised 3D content calendar or editorial funnel with colourful cards arranged in a strategic grid — clean, organised, editorial feel',
+      style:   'flat-to-3D hybrid illustration, editorial graphic style, clean composition',
+      palette: 'warm orange (#f97316), cream, soft brown accents on near-white background',
+      mood:    'strategic, organised, intentional, professional',
     },
     'AI for Creators': {
-      scene:   'futuristic AI-augmented creative workspace',
-      objects: 'holographic AI interface floating above a laptop, neural network nodes as glowing orbs, abstract data streams, creative tools (camera, pen, microphone) intertwined with digital circuits',
-      mood:    'innovative, empowering, human creativity amplified by AI',
-      palette: 'deep purple to electric cyan gradient, magenta accent glows, dark background with luminous AI elements',
-      style:   'cinematic sci-fi 3D concept art, volumetric light rays, Blade Runner aesthetic meets creator economy',
+      subject: 'a friendly 3D AI robot character sitting at a creator desk or holding a camera/microphone — modern, approachable, not scary — with subtle digital elements',
+      style:   'polished 3D character illustration, Pixar-inspired style, clean studio lighting',
+      palette: 'emerald green (#10b981), bright white highlights, dark gradient background',
+      mood:    'innovative, empowering, human + AI collaboration',
     },
     'AI for Creator Economy': {
-      scene:   'AI-powered creator economy command center',
-      objects: 'creator at workstation with translucent AI assistant interface overlay, floating analytics and revenue projections, AI-generated content previews on multiple screens, glowing neural pathways connecting tools',
-      mood:    'transformative, empowering, next-generation creator tools',
-      palette: 'vibrant purple-to-teal gradient, golden AI highlights, dark rich background, luminous data flows',
-      style:   'high-end 3D render + photography composite, cinematic lighting, Wired magazine cover aesthetic',
+      subject: 'a friendly 3D AI robot or holographic assistant floating beside a creator workstation, with subtle glowing neural lines — modern and approachable',
+      style:   'polished 3D illustration, cinematic studio lighting, high-detail render',
+      palette: 'emerald green (#10b981), electric cyan, warm white glow, dark background',
+      mood:    'transformative, future-forward, creator empowerment through AI',
     },
   };
 
   const ctx = categoryContext[category] ?? {
-    scene:   'modern digital creator workspace',
-    objects: 'laptop, premium desk setup, creative tools, soft ambient lighting',
-    mood:    'professional, focused, aspirational',
-    palette: 'clean neutrals with one bold accent color',
-    style:   'professional photography, shallow depth of field',
+    subject: 'a bold 3D trophy or achievement badge floating on a dark gradient background, celebrating a creator milestone',
+    style:   '3D product render, clean studio lighting, high polish',
+    palette: 'rich purple, gold accents, dark background',
+    mood:    'achievement, aspiration, professional growth',
   };
 
   const prompt = await askFast(
-    `You are a world-class visual art director for a top creator economy publication.
-Your job: write a HIGHLY SPECIFIC, VIVID image generation prompt for a blog post cover.
+    `You are an art director creating the RIGHT-SIDE ILLUSTRATION for a split editorial blog cover card.
+The cover has a dark left panel with the blog title text. Your illustration fills the RIGHT side.
 
-POST TITLE: "${topic}"
+POST TOPIC: "${topic}"
 CATEGORY: ${category}
 
-SCENE CONTEXT: ${ctx.scene}
-KEY OBJECTS TO INCLUDE: ${ctx.objects}
-MOOD/ENERGY: ${ctx.mood}
-COLOR PALETTE: ${ctx.palette}
-PHOTOGRAPHIC/ART STYLE: ${ctx.style}
+VISUAL SUBJECT: ${ctx.subject}
+RENDERING STYLE: ${ctx.style}
+COLOUR PALETTE: ${ctx.palette}
+MOOD: ${ctx.mood}
 
-YOUR TASK:
-Write a single image generation prompt (120–160 words) that:
-1. Opens with the primary subject and scene — make it SPECIFIC to the post title (e.g. for "1000 subscribers monetization" include a milestone screen showing "1K subscribers", for "Canva for YouTube" show Canva interface visible on screen)
-2. Describes exact objects, their arrangement, and key visual details
-3. Specifies lighting (direction, quality, color temperature)
-4. Names the color palette explicitly (e.g. "warm amber tones with deep red accents")
-5. States the photographic/art style and technical details (lens, render style, composition)
-6. Ends with: "No text, no words, no letters, no logos anywhere in the image. No human faces."
+KEY CONSTRAINTS (non-negotiable):
+- ONE clear central focal element — not a busy scene with many equal elements
+- TOPIC-SPECIFIC detail: if the topic is about a specific tool, milestone, or concept, reference it visually (e.g. for "1000 subscribers" show a "1K" milestone; for "Canva" show a design tool)
+- The LEFT 20% of the image will be covered by a gradient overlay — keep key elements in the RIGHT 80%
+- Clean background — no cluttered environments
+- ABSOLUTELY NO text, words, letters, numbers, logos, or UI labels
+- No human faces
 
-Return ONLY the image prompt. No explanations, no quotes, no preamble.`,
-    350,
+Write a 100–140 word image generation prompt. Return ONLY the prompt text.`,
+    320,
     0.85,
   );
 

@@ -24,20 +24,29 @@ const STORAGE_BUCKET = 'post-covers';
 // ── Cover image ───────────────────────────────────────────────────────────────
 
 /**
- * Generate an AI cover image for a blog post.
+ * Generate an editorial cover image for a blog post.
  *
- * @param topic    - Post title / topic string
- * @param category - Post category (drives style guidance)
- * @param slug     - Post slug — used as storage filename (optional but recommended)
+ * Pipeline:
+ *  1. Gemini generates a topic-relevant background illustration
+ *  2. Background is stored in Supabase Storage
+ *  3. Returns an /api/og URL that composites the title + background into
+ *     an NP-Digital-style editorial card (dark left panel + illustration right)
+ *
+ * @param topic    - Post topic / keyword (used for background image prompt)
+ * @param category - Post category (drives accent colour and badge)
+ * @param slug     - Post slug — used as storage filename
+ * @param title    - Human-readable post title displayed on the card (falls back to topic)
  */
 export async function fetchCoverImage(
-  topic:    string,
-  category: string,
-  slug?:    string,
+  topic:     string,
+  category:  string,
+  slug?:     string,
+  title?:    string,
 ): Promise<string> {
-  const storageKey = slug ?? slugifyTopic(topic);
+  const storageKey   = slug ?? slugifyTopic(topic);
+  const displayTitle = title ?? topic;
 
-  // 1. Gemini writes a detailed visual prompt
+  // 1. Gemini writes a visual prompt optimised for a RIGHT-SIDE illustration panel
   let imagePrompt: string;
   try {
     imagePrompt = await generateImagePrompt(topic, category);
@@ -46,20 +55,38 @@ export async function fetchCoverImage(
     imagePrompt = buildFallbackPrompt(topic, category);
   }
 
-  // 2. Gemini generates the image → Supabase Storage
+  // 2. Generate background image → Supabase Storage
+  let bgUrl: string | null = null;
+
   try {
-    const url = await generateAndStoreGeminiImage(imagePrompt, storageKey);
-    if (url) { console.log(`[Images] ✅ cover stored: ${url.slice(0, 80)}`); return url; }
+    bgUrl = await generateAndStoreGeminiImage(imagePrompt, `${storageKey}-bg`);
+    if (bgUrl) console.log(`[Images] ✅ background stored: ${bgUrl.slice(0, 80)}`);
   } catch (err) {
     console.warn('[Images] Gemini cover gen failed, trying Pollinations:', err);
   }
 
-  // 3. Pollinations.ai fallback — return URL directly, no HEAD check needed.
-  // Pollinations generates on-demand; the browser fetches the image when it renders.
-  // The HEAD check was causing unnecessary timeouts and falling through to picsum.
-  const pollinationsUrl = buildPollinationsUrl(imagePrompt, topic);
-  console.log(`[Images] ⚠️ Falling back to Pollinations: ${pollinationsUrl.slice(0, 80)}`);
-  return pollinationsUrl;
+  // Pollinations fallback for background
+  if (!bgUrl) {
+    bgUrl = buildPollinationsUrl(imagePrompt, topic);
+    console.log(`[Images] ⚠️ Background falling back to Pollinations`);
+  }
+
+  // 3. Build the OG card URL — this composites title + bg into an editorial card
+  return buildOgCardUrl(displayTitle, category, bgUrl);
+}
+
+/**
+ * Build the /api/og URL that renders an editorial cover card.
+ * The card is generated on-demand by the OG route and cached at the edge.
+ */
+function buildOgCardUrl(title: string, category: string, bgUrl: string): string {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sandeeps.co';
+  const params  = new URLSearchParams({
+    title:    title.slice(0, 120),   // cap to avoid URL length issues
+    category,
+    bg:       bgUrl,
+  });
+  return `${siteUrl}/api/og?${params.toString()}`;
 }
 
 // ── Inline concept images ─────────────────────────────────────────────────────

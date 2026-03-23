@@ -180,9 +180,21 @@ Category: ${category}
 ${queryHints}
 ${competitors ? `Primary keyword to optimise for: "${competitors.keyword}"` : ''}
 
+TITLE RULES (critical for SEO and for the blog cover image):
+- Must be 55–70 characters long (count carefully — this is non-negotiable)
+- Must read like a real human wrote it for Google — descriptive, benefit-driven
+- Include the primary keyword within the first 5 words
+- Add a specificity hook: year (2026), number, or "for creators" / "for YouTube"
+- Good examples:
+    ✅ "How to Monetize YouTube With 1,000 Subscribers in 2026" (55 chars)
+    ✅ "7 Best AI Tools for YouTube Creators That Actually Work" (55 chars)
+    ✅ "Teachable vs Graphy: Which Course Platform Wins in 2026?" (57 chars)
+    ❌ "Passive Income Online Courses" (too short, only 30 chars)
+    ❌ "YouTube Monetization" (way too short — 20 chars)
+
 Return ONLY this JSON object (no markdown, no explanation):
 {
-  "title": "Compelling SEO title 50-60 chars — include primary keyword near the start",
+  "title": "TITLE MUST BE 55-70 CHARS — see rules above",
   "description": "Meta description 150-160 chars — keyword + specific benefit + credibility signal",
   "slug": "url-friendly-slug-with-hyphens",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
@@ -211,6 +223,31 @@ Return ONLY this JSON object (no markdown, no explanation):
       seo_keywords: [topic],
       faqs:         [],
     };
+  }
+
+  // ── Title length guard: if AI returned a short title, expand it ────────────
+  // Short titles (< 45 chars) hurt SEO and look bad on the cover card.
+  if (meta.title && meta.title.length < 45) {
+    console.warn(`[Content] Title too short (${meta.title.length} chars): "${meta.title}" — expanding`);
+    try {
+      const expandedRaw = await askFast(
+        `The SEO title "${meta.title}" is too short for a blog post about "${topic}" in the ${category} category.
+Rewrite it as a 55–70 character SEO title that:
+- Keeps the same topic/angle
+- Adds a specificity hook (year, number, "for creators", "step-by-step", etc.)
+- Includes the primary keyword near the start
+Return ONLY the improved title (no quotes, no explanation).`,
+        120,
+        0.5,
+      );
+      const expanded = expandedRaw.trim().replace(/^["']|["']$/g, '');
+      if (expanded.length >= 45 && expanded.length <= 80) {
+        console.log(`[Content] Title expanded: "${expanded}" (${expanded.length} chars)`);
+        meta.title = expanded;
+      }
+    } catch {
+      // Non-fatal — keep the original short title
+    }
   }
 
   // AI-specific extra rules for "AI for Creator Economy" posts

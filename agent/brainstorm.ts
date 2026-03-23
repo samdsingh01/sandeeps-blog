@@ -393,9 +393,10 @@ Return ONLY this JSON:
     });
 
     emailSent = await sendEmail({
-      to: process.env.REPORT_EMAIL_TO || 'sandeep.singh@graphy.com',
+      to:      process.env.REPORT_EMAIL_TO || 'sandeep.singh@graphy.com',
       subject: `🧠 Weekly Intelligence Brief — ${weekOf}`,
-      html: emailHtml,
+      html:    emailHtml,
+      replyTo: 'reply@sandeeps.co',   // Sandeep can reply with instructions
     });
 
     console.log(
@@ -565,6 +566,21 @@ function buildBrainstormEmail(params: {
     `
         : ''
     }
+
+    <div class="section" style="background:#f0fdf4; border:1px solid #bbf7d0;">
+      <div class="section-title" style="color:#059669;">💬 Reply to this email with instructions</div>
+      <p style="font-size:13px; margin:0; color:#374151;">
+        I'll understand and execute them automatically. Try:
+      </p>
+      <ul style="font-size:13px; margin:10px 0; color:#374151; padding-left:20px;">
+        <li><strong>"Write about X"</strong> — adds X as a priority-10 keyword today</li>
+        <li><strong>"Skip Y"</strong> — blocks that topic going forward</li>
+        <li><strong>"Use case study format this week"</strong> — overrides the experiment rotation</li>
+        <li><strong>"Pause for 3 days"</strong> — halts content generation</li>
+        <li><strong>"Show me stats"</strong> — emails you a traffic/performance summary</li>
+        <li><strong>"Run now"</strong> — triggers an immediate content run</li>
+      </ul>
+    </div>
 
     <div class="footer">
       <p>Sent by Sandeep's Blog Agent — ${new Date().toISOString().split('T')[0]}</p>

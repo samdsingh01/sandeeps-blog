@@ -12,10 +12,12 @@
 const RESEND_API = 'https://api.resend.com/emails';
 
 interface SendEmailParams {
-  to:      string;
-  subject: string;
-  html:    string;
-  from?:   string;
+  to:       string;
+  subject:  string;
+  html:     string;
+  from?:    string;
+  /** Reply-To header — set to reply@sandeeps.co so all replies hit the inbound webhook */
+  replyTo?: string;
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<boolean> {
@@ -36,9 +38,12 @@ export async function sendEmail(params: SendEmailParams): Promise<boolean> {
       },
       body: JSON.stringify({
         from,
-        to:      [params.to],
-        subject: params.subject,
-        html:    params.html,
+        to:       [params.to],
+        subject:  params.subject,
+        html:     params.html,
+        // reply_to enables bidirectional email — Sandeep can reply and
+        // Resend routes it to /api/webhooks/email-reply for automatic execution
+        ...(params.replyTo ? { reply_to: params.replyTo } : {}),
       }),
     });
 

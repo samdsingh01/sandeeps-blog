@@ -313,7 +313,7 @@ async function runBofuPost({
     const contentHtml = await renderMarkdown(markdown);
     const readingTime  = calcReadingTime(markdown);
     const [coverImage, contentImages] = await Promise.all([
-      fetchCoverImage(topic, category, slug),
+      fetchCoverImage(topic, category, slug, title),   // pass title for OG card display
       generateContentImages(markdown, topic, category, slug),
     ]);
     const enrichedHtml = injectContentImages(contentHtml, contentImages);
@@ -384,7 +384,7 @@ async function runTofuPost({
     const contentHtml  = await renderMarkdown(markdown);
     const readingTime   = calcReadingTime(markdown);
     const [coverImage, contentImages] = await Promise.all([
-      fetchCoverImage(trendTopic, category, slug),
+      fetchCoverImage(trendTopic, category, slug, title),   // pass title for OG card
       generateContentImages(markdown, trendTopic, category, slug),
     ]);
     const enrichedHtml = injectContentImages(contentHtml, contentImages);

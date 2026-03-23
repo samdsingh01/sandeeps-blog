@@ -134,11 +134,13 @@ export async function escalateToSandeep(ctx: EscalationContext): Promise<false> 
   <p>The agent did <strong>not</strong> proceed with this action. Come to Claude chat to review the situation and give direction.</p>
 
   <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px; margin-top: 24px;">
-    <strong>Next steps:</strong><br/>
-    1. Review the details above<br/>
-    2. Open Claude (the desktop app or web) and discuss the situation<br/>
-    3. Tell Claude what you'd like the agent to do — it will update accordingly<br/>
-    4. You can manually re-trigger the agent run via:<br/>
+    <strong>💬 Reply to this email with instructions — I'll execute them automatically:</strong><br/><br/>
+    • <code>"Approve"</code> — proceed with the action as planned<br/>
+    • <code>"Skip this topic"</code> — mark it as blocked, move to next keyword<br/>
+    • <code>"Write about X instead"</code> — swap topic immediately<br/>
+    • <code>"Pause for 2 days"</code> — halt generation temporarily<br/>
+    • <code>"Run now"</code> — trigger an immediate agent run<br/><br/>
+    Or manually re-trigger via:<br/>
     <code style="font-size: 12px;">https://sandeeps.co/api/agent/run?key=${process.env.CRON_SECRET ?? 'YOUR_KEY'}</code>
   </div>
 
@@ -147,11 +149,14 @@ export async function escalateToSandeep(ctx: EscalationContext): Promise<false> 
   </p>
 </div>`;
 
-  // Send email
+  // Send email — reply-to enables Sandeep to reply with instructions
   const to = AGENT_MISSION.contact;
-  await sendEmail({ to, subject, html }).catch((e) =>
-    console.error('[Escalate] Failed to send escalation email:', e)
-  );
+  await sendEmail({
+    to,
+    subject,
+    html,
+    replyTo: 'reply@sandeeps.co',
+  }).catch((e) => console.error('[Escalate] Failed to send escalation email:', e));
 
   // Log to DB
   try {
