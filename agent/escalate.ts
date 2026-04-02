@@ -156,7 +156,6 @@ export async function escalateToSandeep(ctx: EscalationContext): Promise<false> 
     to,
     subject,
     html,
-    replyTo: 'reply@inbound.sandeeps.co',
   }).catch((e) => console.error('[Escalate] Failed to send escalation email:', e));
 
   // Log to DB

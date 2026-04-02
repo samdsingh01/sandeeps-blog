@@ -396,7 +396,6 @@ Return ONLY this JSON:
       to:      process.env.REPORT_EMAIL_TO || 'sandeep.singh@graphy.com',
       subject: `🧠 Weekly Intelligence Brief — ${weekOf}`,
       html:    emailHtml,
-      replyTo: 'reply@inbound.sandeeps.co',   // Sandeep can reply with instructions
     });
 
     console.log(

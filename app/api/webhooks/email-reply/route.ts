@@ -145,7 +145,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         to:      REPORT_TO,
         subject: `Re: ${subject.startsWith('Re: ') ? subject.slice(4) : subject} — Done ✅`,
         html:    confirmHtml,
-        replyTo: 'reply@inbound.sandeeps.co',
       });
     }
 

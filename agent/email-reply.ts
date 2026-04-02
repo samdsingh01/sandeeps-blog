@@ -551,7 +551,6 @@ export async function fetchAndEmailStats(to: string): Promise<void> {
       to,
       subject: `📊 Blog Stats — ${monthClicks.toLocaleString()} clicks (30d) · ${goalPct}% to 10K goal`,
       html,
-      replyTo: 'reply@inbound.sandeeps.co',
     });
 
   } catch (err) {
