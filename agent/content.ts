@@ -44,18 +44,111 @@ export const CATEGORIES = [
 ];
 
 /**
- * Pick the best category for a given topic
+ * Pick the best category for a given topic.
+ *
+ * WHY THIS MATTERS:
+ * A vague prompt + substring matching caused nearly every post to land in
+ * "Creator Growth" (the most generic-sounding category). The fix:
+ *   1. Rich per-category descriptions with examples
+ *   2. Explicit disambiguation rules for common edge cases
+ *   3. Low temperature (0.1) for consistent, deterministic output
+ *   4. Exact match → substring match → topic-keyword fallback (3 layers)
  */
 export async function classifyCategory(topic: string): Promise<string> {
-  const prompt = `
-Classify this blog post topic into exactly one category.
-Topic: "${topic}"
-Categories: ${CATEGORIES.join(', ')}
-Return ONLY the category name, nothing else.`;
+  const prompt = `You are a blog category classifier for sandeeps.co, a blog for YouTube creators and online coaches.
 
-  const result = await askFast(prompt, 50);
-  const match = CATEGORIES.find((c) => result.includes(c));
-  return match ?? 'Creator Growth';
+Classify this topic into EXACTLY ONE category. Return only the category name — nothing else, no punctuation, no explanation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY DEFINITIONS (read carefully):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"YouTube Monetization"
+  Covers: AdSense, RPM/CPM, YouTube Partner Program (YPP), Super Thanks,
+  channel memberships, Shorts monetization, brand deals tied to YouTube,
+  making money from YouTube videos, income from a YouTube channel.
+  Examples: "how to get monetized on youtube", "youtube adsense revenue",
+  "how much does youtube pay per 1000 views", "youtube shorts fund",
+  "how to make money with 1000 subscribers"
+
+"Course Creation"
+  Covers: Building, pricing, launching, and selling online courses or digital
+  products. Platforms: Teachable, Thinkific, Graphy, Kajabi, Udemy, Gumroad.
+  Course structure, student completion, course funnels, membership sites.
+  Examples: "how to create an online course", "best course creation platforms",
+  "teachable vs graphy comparison", "how to price an online course",
+  "selling digital products as a creator"
+
+"Creator Growth"
+  Covers: Growing a YouTube channel audience — subscriber growth, YouTube
+  algorithm, channel niche, thumbnails, video titles, watch time, retention,
+  posting frequency, personal branding, building a fanbase from zero.
+  Examples: "how to get more youtube subscribers", "youtube algorithm explained",
+  "best niche for youtube channel", "how to increase watch time",
+  "youtube thumbnail best practices"
+  NOT: making money from YouTube (that is YouTube Monetization)
+  NOT: content planning across platforms (that is Content Strategy)
+
+"Content Strategy"
+  Covers: Planning, batching, repurposing, and distributing content across
+  platforms (YouTube → TikTok/Instagram/LinkedIn). Content calendars, content
+  pillars, SEO-driven content planning, faceless YouTube channels, editorial
+  workflows, video scripting systems.
+  Examples: "content repurposing strategy for creators", "content calendar
+  for youtube", "youtube SEO strategy 2026", "batch filming workflow",
+  "content pillars for a youtube channel", "faceless youtube channel ideas"
+
+"AI for Creator Economy"
+  Covers: Using AI tools to create, edit, script, or automate content.
+  ChatGPT for YouTube scripts, AI video editing, AI thumbnail generation,
+  AI voiceovers, automated content pipelines, AI tools for creators.
+  Examples: "best AI tools for youtubers", "how to use ChatGPT for youtube
+  scripts", "AI video editing software", "AI thumbnail generators"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DISAMBIGUATION RULES (when you are unsure):
+  - "grow + income/earn/money/revenue/monetize" → YouTube Monetization
+  - "grow + subscribers/views/algorithm/audience/channel" → Creator Growth
+  - Anything mentioning "course", "sell knowledge", "digital product" → Course Creation
+  - AI / ChatGPT / automation tools for content creation → AI for Creator Economy
+  - Content planning, repurposing, calendars, multi-platform → Content Strategy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TOPIC TO CLASSIFY: "${topic}"
+
+Reply with EXACTLY one of these (copy it verbatim):
+YouTube Monetization
+Course Creation
+Creator Growth
+Content Strategy
+AI for Creator Economy`;
+
+  const result = (await askFast(prompt, 100, 0.1)).trim();
+
+  // Layer 1: exact case-insensitive match
+  const exactMatch = CATEGORIES.find(
+    (c) => result.toLowerCase() === c.toLowerCase(),
+  );
+  if (exactMatch) return exactMatch;
+
+  // Layer 2: Gemini included extra words — find which category name is present
+  const subMatch = CATEGORIES.find((c) => result.includes(c));
+  if (subMatch) return subMatch;
+
+  // Layer 3: keyword heuristics on the TOPIC itself (bypasses Gemini entirely)
+  const t = topic.toLowerCase();
+  if (/monetiz|adsense|rpm|cpm|earn|income|revenue|pay\b|making money|partner program/.test(t))
+    return 'YouTube Monetization';
+  if (/\bcourse\b|teach|sell (online|course|digital)|kajabi|teachable|thinkific|gumroad|membership site/.test(t))
+    return 'Course Creation';
+  if (/\bai\b|chatgpt|artificial intel|automat(e|ion)|llm|midjourney|dalle|voiceover ai/.test(t))
+    return 'AI for Creator Economy';
+  if (/strategy|calendar|repurpos|pillar|batch|editorial|faceless|multi.?platform|content seo/.test(t))
+    return 'Content Strategy';
+
+  // Layer 4: true last resort (only if everything else fails)
+  console.warn(`[Category] Could not classify "${topic}" — falling back to Creator Growth`);
+  return 'Creator Growth';
 }
 
 /**
