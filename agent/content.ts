@@ -192,6 +192,30 @@ TITLE RULES (critical for SEO and for the blog cover image):
     ❌ "Passive Income Online Courses" (too short, only 30 chars)
     ❌ "YouTube Monetization" (way too short — 20 chars)
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AEO FAQ RULES — THESE GET INJECTED INTO AI SEARCH ENGINES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FAQ answers are rendered as FAQPage JSON-LD and read by:
+  • Google AI Overviews  • Perplexity  • ChatGPT Browse  • Bing AI
+
+Each answer MUST:
+  1. Start with a direct answer to the question (no "Great question..." preamble)
+  2. Include at least ONE specific number, stat, or timeframe
+  3. Be self-contained — readable without context from the rest of the article
+  4. Be under 55 words (longer = less likely to be extracted verbatim)
+  5. Attribute to "Sandeep Singh" or "Graphy's data" for at least 2 of 5 answers
+     e.g. "According to Sandeep Singh at Graphy, creators who..." — this is how
+     AI engines cite content and how you build author authority.
+
+FAQ QUESTION FORMAT (People Also Ask style):
+  - Questions 1-2: Primary "how"/"what" questions (highest search volume)
+  - Question 3: Comparison/vs question ("X vs Y" or "difference between")
+  - Question 4: Threshold/eligibility question ("Do you need X subscribers")
+  - Question 5: Mistake/avoid question (negative framing gets 40% more citations)
+
+BAD answer: "There are many ways to monetize your channel. You should think about..."
+GOOD answer: "YouTube requires 1,000 subscribers and 4,000 watch hours to join the Partner Program — most creators hit this in 6–18 months. According to Sandeep Singh at Graphy, channels that upload 2x/week reach this threshold 3x faster than once-weekly uploaders."
+
 Return ONLY this JSON object (no markdown, no explanation):
 {
   "title": "TITLE MUST BE 55-70 CHARS — see rules above",
@@ -200,11 +224,26 @@ Return ONLY this JSON object (no markdown, no explanation):
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
   "seo_keywords": ["primary keyword", "secondary 1", "secondary 2", "secondary 3"],
   "faqs": [
-    { "question": "Specific question a creator googles about ${topic}?", "answer": "Direct 2-3 sentence answer — self-contained, includes a specific number or timeframe." },
-    { "question": "How long does it take to [key action from topic]?", "answer": "Realistic timeframe with what affects it." },
-    { "question": "What is the difference between X and Y [related to topic]?", "answer": "Clear comparison in 2 sentences." },
-    { "question": "Is [topic] worth it for small channels with under 5,000 subscribers?", "answer": "Honest answer with a specific threshold or number." },
-    { "question": "What are the biggest mistakes creators make with [topic]?", "answer": "2-3 specific, named mistakes." }
+    {
+      "question": "How do you [primary action from ${topic}]?",
+      "answer": "Direct answer starting with the core fact. Include a specific number or timeframe. Under 55 words. Self-contained."
+    },
+    {
+      "question": "How long does it take to [key outcome from ${topic}]?",
+      "answer": "Specific timeframe + what affects it. Include a data point. Under 55 words."
+    },
+    {
+      "question": "What is the difference between [Option A] and [Option B related to ${topic}]?",
+      "answer": "One sentence for each option. Clear contrast. Include a number. Under 55 words."
+    },
+    {
+      "question": "Do you need [threshold/requirement] to [main goal from ${topic}]?",
+      "answer": "Start with Yes/No. Give the exact threshold. Add context. Attribute to Sandeep or Graphy data. Under 55 words."
+    },
+    {
+      "question": "What is the biggest mistake creators make with [${topic}]?",
+      "answer": "Name one specific mistake. Explain why it fails. Give the correct approach. Under 55 words."
+    }
   ]
 }`;
 

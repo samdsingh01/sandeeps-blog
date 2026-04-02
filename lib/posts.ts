@@ -8,6 +8,7 @@ export interface PostMeta {
   title:       string;
   description: string;
   date:        string;
+  updatedAt:   string;   // ISO — used for Article dateModified in schema
   category:    string;
   tags:        string[];
   author:      string;
@@ -29,6 +30,7 @@ function toPostMeta(row: DbPost): PostMeta {
     title:       row.title       ?? 'Untitled',
     description: row.description ?? '',
     date:        row.published_at ?? new Date().toISOString(),
+    updatedAt:   row.updated_at  ?? row.published_at ?? new Date().toISOString(),
     category:    row.category    ?? 'General',
     // Guard: DB may return null even though schema says NOT NULL (migration timing)
     tags:        Array.isArray(row.tags)        ? row.tags        : [],

@@ -53,22 +53,52 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/favicon.ico" />
         {/* NOTE: Per-page canonical URLs are set in each page's generateMetadata() — NOT here.
             A hardcoded canonical here would wrongly point every post to the homepage. */}
-        {/* JSON-LD Site Identity */}
+        {/* WebSite entity — SearchAction enables Google Sitelinks Search Box */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               '@context': 'https://schema.org',
-              '@type': 'WebSite',
-              name: "Sandeep's Blog",
-              url: 'https://sandeeps.co',
-              description: 'Grow, monetize & build your creator business',
-              author: {
-                '@type': 'Person',
-                name: 'Sandeep Singh',
-                jobTitle: 'Co-founder',
-                worksFor: { '@type': 'Organization', name: 'Graphy.com' },
+              '@type':    'WebSite',
+              '@id':      'https://sandeeps.co/#website',
+              name:       "Sandeep's Blog",
+              url:        'https://sandeeps.co',
+              description: 'Actionable guides for YouTube creators and online coaches to grow and monetize their audience.',
+              inLanguage:  'en-US',
+              potentialAction: {
+                '@type':       'SearchAction',
+                target: {
+                  '@type':     'EntryPoint',
+                  urlTemplate: 'https://sandeeps.co/blog?q={search_term_string}',
+                },
+                'query-input': 'required name=search_term_string',
               },
+            }),
+          }}
+        />
+        {/* Person entity — @id allows Article schemas to reference Sandeep
+            consistently, which AI engines use to build author authority graphs */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context':  'https://schema.org',
+              '@type':     'Person',
+              '@id':       'https://sandeeps.co/#author',
+              name:        'Sandeep Singh',
+              url:         'https://sandeeps.co/about',
+              jobTitle:    'Co-founder',
+              description: 'Sandeep Singh is co-founder of Graphy.com, a platform used by 50,000+ creators to build and sell online courses. He writes about YouTube monetization, creator growth, and building online businesses.',
+              worksFor: {
+                '@type': 'Organization',
+                '@id':   'https://graphy.com/#organization',
+                name:    'Graphy.com',
+                url:     'https://graphy.com',
+              },
+              sameAs: [
+                'https://graphy.com',
+                'https://twitter.com/graphyapp',
+              ],
             }),
           }}
         />

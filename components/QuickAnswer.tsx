@@ -27,7 +27,13 @@ interface Props {
 
 export default function QuickAnswer({ question, answer, sources, className = '' }: Props) {
   return (
+    /*
+     * id="quick-answer" — referenced by the Speakable JSON-LD in page.tsx
+     * via cssSelector "#quick-answer". This tells Google AI Overviews, voice
+     * assistants, and Perplexity exactly which block contains the primary answer.
+     */
     <div
+      id="quick-answer"
       className={`my-6 not-prose ${className}`}
       itemScope
       itemType="https://schema.org/Question"
@@ -51,9 +57,10 @@ export default function QuickAnswer({ question, answer, sources, className = '' 
           {question}
         </h2>
 
-        {/* Answer */}
+        {/* Answer — id="quick-answer-text" allows speakable CSS selector targeting */}
         <div itemProp="acceptedAnswer" itemScope itemType="https://schema.org/Answer">
           <p
+            id="quick-answer-text"
             className="text-gray-800 leading-relaxed text-base font-medium"
             itemProp="text"
           >
@@ -76,18 +83,6 @@ export default function QuickAnswer({ question, answer, sources, className = '' 
           </div>
         )}
       </div>
-
-      {/* Speakable schema — helps voice search and AI assistants */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type':    'Speakable',
-            'speakableSelector': ['.quick-answer-text'],
-          }),
-        }}
-      />
     </div>
   );
 }

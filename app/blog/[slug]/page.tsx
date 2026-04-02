@@ -78,24 +78,78 @@ export default async function BlogPostPage({ params }: Props) {
   const safeContent    = post.content ?? '';
   const safeCategory   = post.category ?? 'General';
 
+  const canonicalUrl  = `https://sandeeps.co/blog/${post.slug}`;
+  const authorId      = 'https://sandeeps.co/#author';
+  const publisherId   = 'https://sandeeps.co/#organization';
+
+  // ── Article schema — comprehensive for Google AI Overviews + Perplexity ──
+  // Key fields AI engines look for:
+  //   dateModified → signals freshness (stale content gets de-prioritised)
+  //   image        → enables rich results and visual AEO citations
+  //   wordCount    → signals depth (AI engines favour comprehensive coverage)
+  //   @id          → links this article into the site's entity graph
+  //   about        → named topic entity (helps AI understand what this covers)
+  //   speakable    → marks extractable answer blocks for voice + AI snippets
   const articleSchema = {
-    "@context":  "https://schema.org",
-    "@type":     "Article",
-    headline:    post.title,
-    description: post.description,
+    "@context":        "https://schema.org",
+    "@type":           "Article",
+    "@id":             `${canonicalUrl}#article`,
+    headline:          post.title,
+    description:       post.description,
+    url:               canonicalUrl,
+    mainEntityOfPage:  { "@type": "WebPage", "@id": canonicalUrl },
+    inLanguage:        "en-US",
     author: {
       "@type":    "Person",
+      "@id":      authorId,
       name:       post.author,
       jobTitle:   post.authorRole,
-      worksFor:   { "@type": "Organization", name: "Graphy.com" },
+      url:        "https://sandeeps.co/about",
+      worksFor: {
+        "@type": "Organization",
+        "@id":   "https://graphy.com/#organization",
+        name:    "Graphy.com",
+        url:     "https://graphy.com",
+      },
     },
-    datePublished: post.date,
     publisher: {
       "@type": "Organization",
+      "@id":   publisherId,
       name:    "Sandeep's Blog",
       url:     "https://sandeeps.co",
+      logo: {
+        "@type": "ImageObject",
+        url:     "https://sandeeps.co/images/logo.png",
+      },
     },
-    keywords: safeSeoKw.join(", "),
+    datePublished:  post.date,
+    dateModified:   post.updatedAt ?? post.date,
+    keywords:       safeSeoKw.join(", "),
+    articleSection: safeCategory,
+    // image — required for Google rich results; AI engines use it for visual citations
+    ...(post.coverImage && post.coverImage !== "/images/default-cover.svg" ? {
+      image: {
+        "@type":  "ImageObject",
+        url:      post.coverImage.startsWith("http")
+          ? post.coverImage
+          : `https://sandeeps.co${post.coverImage}`,
+        width:    1200,
+        height:   630,
+        caption:  post.title,
+      },
+    } : {}),
+    // speakable — tells Google AI Overviews which element is the quotable answer
+    ...(safeFaqs.length > 0 ? {
+      speakable: {
+        "@type":       "SpeakableSpecification",
+        cssSelector:   ["#quick-answer", "#quick-answer-text"],
+      },
+    } : {}),
+    // about — named entity: what this article is actually about
+    about: {
+      "@type": "Thing",
+      name:    safeCategory,
+    },
   };
 
   // AEO: FAQ schema for Google AI Overviews + Perplexity
@@ -112,13 +166,72 @@ export default async function BlogPostPage({ params }: Props) {
     })),
   } : null;
 
+  // AEO: BreadcrumbList schema — helps AI engines understand site hierarchy
+  // and enables Google sitelinks breadcrumbs in SERPs
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type":    "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home",     item: "https://sandeeps.co" },
+      { "@type": "ListItem", position: 2, name: "Blog",     item: "https://sandeeps.co/blog" },
+      { "@type": "ListItem", position: 3, name: safeCategory,
+        item: `https://sandeeps.co/categories/${safeCategory.toLowerCase().replace(/\s+/g, "-")}` },
+      { "@type": "ListItem", position: 4, name: post.title, item: canonicalUrl },
+    ],
+  };
+
+  // AEO: HowTo schema — detect step-by-step posts from content HTML
+  // Looks for ordered-list items inside the post body. When found, AI engines
+  // (especially Google AI Overviews) display step-by-step rich results.
+  const howToSteps: Array<{ name: string; text: string }> = [];
+  const stepMatches = safeContent.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+  let stepIndex = 0;
+  for (const match of stepMatches) {
+    if (stepIndex >= 10) break;
+    const text = match[1].replace(/<[^>]+>/g, '').trim();
+    if (text.length > 20 && text.length < 300) {
+      howToSteps.push({ name: `Step ${stepIndex + 1}`, text });
+      stepIndex++;
+    }
+  }
+  // Only emit HowTo schema if title signals instructional intent AND we have steps
+  const isHowToPost =
+    howToSteps.length >= 3 &&
+    /^(how to|guide to|step[s]? to|ways to|\d+ (ways|steps|tips|methods))/i.test(post.title);
+  const howToSchema = isHowToPost ? {
+    "@context":   "https://schema.org",
+    "@type":      "HowTo",
+    name:         post.title,
+    description:  post.description,
+    image:        post.coverImage && post.coverImage !== "/images/default-cover.svg"
+      ? (post.coverImage.startsWith("http") ? post.coverImage : `https://sandeeps.co${post.coverImage}`)
+      : undefined,
+    author: { "@type": "Person", "@id": authorId },
+    step: howToSteps.slice(0, 10).map((s, i) => ({
+      "@type":    "HowToStep",
+      position:   i + 1,
+      name:       s.name,
+      text:       s.text,
+    })),
+  } : null;
+
   return (
     <>
+      {/* Article — core identity + speakable + author entity */}
       <script type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
+      {/* FAQPage — prime AEO target: Google AI Overviews, Perplexity, ChatGPT */}
       {faqSchema && (
         <script type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+      )}
+      {/* BreadcrumbList — site hierarchy for AI + sitelinks breadcrumbs */}
+      <script type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      {/* HowTo — step-by-step rich results (only on instructional posts) */}
+      {howToSchema && (
+        <script type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }} />
       )}
 
       {/* Breadcrumb */}
