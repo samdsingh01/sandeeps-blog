@@ -17,6 +17,7 @@ import { fetchPagePerformance } from '@/agent/gsc';
 import { storePagePerformance, getFeedbackInsights, boostKeywordsFromFeedback } from '@/agent/feedback';
 import { runCTROptimizer } from '@/agent/ctr';
 import { runABTitleTests } from '@/agent/abtitle';
+import { runAutoExec } from '@/agent/autoexec';
 
 export const dynamic    = 'force-dynamic';
 export const maxDuration = 60;
@@ -53,6 +54,20 @@ export async function POST(req: Request) {
     const abSwaps   = abResults.filter((r) => r.action === 'swapped_to_b').length;
     const abWinners = abResults.filter((r) => r.winner).length;
 
+    // 6. Auto-execute today's strategic recommendations (non-blocking)
+    //    This queues content keywords, logs distribution/technical tasks,
+    //    and stores a daily snapshot for delta reporting in tomorrow's email.
+    let autoExecResult: Awaited<ReturnType<typeof runAutoExec>> | null = null;
+    try {
+      autoExecResult = await runAutoExec();
+      console.log(
+        `[Sync] AutoExec — ${autoExecResult.keywordsQueued} keywords queued, ` +
+        `${autoExecResult.tasksLogged} tasks logged`,
+      );
+    } catch (e) {
+      console.warn('[Sync] AutoExec failed (non-fatal):', e);
+    }
+
     console.log('[Sync] ✅ Complete');
 
     return Response.json({
@@ -66,6 +81,13 @@ export async function POST(req: Request) {
       ctrOptimized:    ctrResults.length,
       abTitleTests:    { checked: abResults.length, swapped: abSwaps, winnersDecided: abWinners },
       hotCategories:   insights.hotCategories,
+      autoExec: autoExecResult
+        ? {
+            keywordsQueued: autoExecResult.keywordsQueued,
+            tasksLogged:    autoExecResult.tasksLogged,
+            focus:          autoExecResult.strategyFocus.slice(0, 80),
+          }
+        : null,
     });
 
   } catch (err) {

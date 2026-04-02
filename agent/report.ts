@@ -8,6 +8,7 @@
 import { getServiceClient }                          from '../lib/supabase';
 import { getDailyStrategy, DailyStrategy }            from './strategy';
 import { getPendingDistribution, formatDistributionForEmail, DistributionDrafts } from './distribute';
+import { getYesterdayDelta, getPendingAgentTasks, DailyDelta } from './autoexec';
 import { fetchGA4Metrics, GA4SiteMetrics }            from './ga4';
 
 export interface DailyReport {
@@ -21,6 +22,9 @@ export interface DailyReport {
   strategy?:           DailyStrategy;
   distributionDrafts?: DistributionDrafts[];
   ga4?:                GA4SiteMetrics;
+  delta?:              DailyDelta;
+  pendingTasks?:       Array<{ type: string; action: string; why: string; timeframe: string; createdAt: string }>;
+  autoKeywordsQueued?: number;
 }
 
 interface PostSummary {
@@ -149,6 +153,32 @@ export async function buildDailyReport(): Promise<DailyReport> {
     console.error('[Report] GA4 metrics failed (non-fatal):', err);
   }
 
+  // Get daily delta (what changed vs yesterday) — non-blocking
+  let delta: DailyDelta | undefined;
+  try {
+    const d = await getYesterdayDelta();
+    if (d) delta = d;
+  } catch (err) {
+    console.error('[Report] Delta fetch failed (non-fatal):', err);
+  }
+
+  // Get pending tasks the agent logged today (distribution, technical) — non-blocking
+  let pendingTasks: Awaited<ReturnType<typeof getPendingAgentTasks>> | undefined;
+  let autoKeywordsQueued = 0;
+  try {
+    pendingTasks = await getPendingAgentTasks();
+    // Count keywords auto-queued today from agent_logs
+    const today0 = new Date(); today0.setHours(0,0,0,0);
+    const { data: kwLogs } = await db
+      .from('keywords')
+      .select('id', { count: 'exact', head: false })
+      .eq('search_volume', 'agent-sourced')
+      .gte('created_at', today0.toISOString());
+    autoKeywordsQueued = kwLogs?.length ?? 0;
+  } catch (err) {
+    console.error('[Report] Pending tasks fetch failed (non-fatal):', err);
+  }
+
   return {
     date:                now.toISOString(),
     newPostsToday:       (todayPosts ?? []).map(toSummary),
@@ -171,6 +201,9 @@ export async function buildDailyReport(): Promise<DailyReport> {
     strategy,
     distributionDrafts,
     ga4,
+    delta,
+    pendingTasks,
+    autoKeywordsQueued,
   };
 }
 
@@ -189,7 +222,14 @@ export function formatReportEmail(report: DailyReport): { subject: string; html:
     agentErrors > 0    ? '⚠️' :
     agentSuccess > 0   ? '✅' : '😴';
 
-  const subject = `${statusEmoji} Sandeep's Blog Daily Report — ${dateStr}`;
+  // Make subject dynamic: show what agent actually did today
+  const agentActionSummary =
+    (report.autoKeywordsQueued ?? 0) > 0
+      ? ` · 🤖 ${report.autoKeywordsQueued} keywords queued`
+      : (report.newPostsToday.length > 0
+          ? ` · ✍️ ${report.newPostsToday.length} new post${report.newPostsToday.length > 1 ? 's' : ''}`
+          : '');
+  const subject = `${statusEmoji} Blog Report — ${new Date(report.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${agentActionSummary}`;
 
   const qualityBadge = (score?: number) => {
     if (!score) return '';
@@ -234,6 +274,65 @@ export function formatReportEmail(report: DailyReport): { subject: string; html:
       <p style="color:#ddd6fe;margin:8px 0 0;font-size:14px;">${dateStr}</p>
       <p style="color:#fff;margin:16px 0 0;font-size:36px;font-weight:900;">${report.totalPosts} <span style="font-size:16px;font-weight:400;color:#ddd6fe;">total posts published</span></p>
     </div>
+
+    <!-- 🤖 Agent Actions Today — what the agent actually DID -->
+    ${(report.autoKeywordsQueued ?? 0) > 0 || (report.pendingTasks && report.pendingTasks.length > 0) ? `
+    <div style="background:#0f172a;border-radius:12px;padding:20px;margin-bottom:24px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <span style="font-size:20px;">🤖</span>
+        <div>
+          <h2 style="margin:0;font-size:15px;font-weight:800;color:#f1f5f9;">Agent took action today</h2>
+          <p style="margin:2px 0 0;font-size:12px;color:#64748b;">Your autonomous blog agent ran its daily strategy and acted on it</p>
+        </div>
+      </div>
+      ${(report.autoKeywordsQueued ?? 0) > 0 ? `
+      <div style="background:#1e293b;border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid #10b981;">
+        <span style="font-size:12px;font-weight:700;color:#10b981;">✅ AUTO-EXECUTED</span>
+        <p style="margin:4px 0 0;font-size:13px;color:#e2e8f0;">Queued <strong style="color:#34d399;">${report.autoKeywordsQueued} new keyword${(report.autoKeywordsQueued ?? 0) === 1 ? '' : 's'}</strong> for content generation — these will be written as new posts by tomorrow's content cron</p>
+      </div>` : ''}
+      ${report.pendingTasks && report.pendingTasks.length > 0 ? `
+      <div style="background:#1e293b;border-radius:8px;padding:12px 14px;border-left:3px solid #f59e0b;">
+        <span style="font-size:12px;font-weight:700;color:#f59e0b;">⏳ NEEDS YOUR ACTION</span>
+        <p style="margin:4px 0 6px;font-size:12px;color:#94a3b8;">${report.pendingTasks.length} distribution/technical task${report.pendingTasks.length === 1 ? '' : 's'} queued — the agent can't do these without you:</p>
+        ${report.pendingTasks.slice(0, 3).map((t) => `
+        <div style="margin-top:8px;padding:8px 10px;background:#0f172a;border-radius:6px;">
+          <span style="font-size:11px;font-weight:700;color:${t.type === 'distribution_task' ? '#60a5fa' : '#f97316'};">${t.type === 'distribution_task' ? '📣 DISTRIBUTE' : '⚙️ TECHNICAL'}</span>
+          <p style="margin:3px 0 0;font-size:12px;color:#cbd5e1;">${t.action}</p>
+          ${t.timeframe ? `<p style="margin:2px 0 0;font-size:11px;color:#475569;">⏱ ${t.timeframe}</p>` : ''}
+        </div>`).join('')}
+      </div>` : ''}
+    </div>` : ''}
+
+    <!-- 📈 Daily Delta — what changed since yesterday -->
+    ${report.delta ? (() => {
+      const d         = report.delta!;
+      const clicksUp  = d.clicksDelta >= 0;
+      const posUp     = d.positionDelta <= 0;   // lower position = better rank
+      const clicksStr = `${clicksUp ? '▲' : '▼'} ${Math.abs(d.clicksDelta).toLocaleString()} weekly clicks vs yesterday`;
+      const posStr    = d.positionDelta === 0
+        ? 'No change in avg position'
+        : `${posUp ? '▲ Rank improved' : '▼ Rank dropped'} ${Math.abs(d.positionDelta).toFixed(1)} positions`;
+      const postsStr  = d.postsDelta > 0 ? `+${d.postsDelta} new post${d.postsDelta === 1 ? '' : 's'} since yesterday` : 'No new posts yesterday';
+      return `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+      <h2 style="margin:0 0 12px;font-size:13px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:1px;">📈 What Changed Since Yesterday</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div style="text-align:center;">
+          <div style="font-size:18px;font-weight:900;color:${clicksUp ? '#059669' : '#dc2626'};">${clicksUp ? '▲' : '▼'} ${Math.abs(d.clicksDelta)}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px;">Weekly Clicks</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:18px;font-weight:900;color:${posUp ? '#059669' : '#dc2626'};">${posUp ? '▲' : '▼'} ${Math.abs(d.positionDelta).toFixed(1)}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px;">Avg Position${posUp ? ' (better)' : ''}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:18px;font-weight:900;color:${d.postsDelta > 0 ? '#059669' : '#9ca3af'};">${d.postsDelta > 0 ? '+' : ''}${d.postsDelta}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px;">New Posts</div>
+        </div>
+      </div>
+      ${d.previousFocus ? `<p style="margin:12px 0 0;font-size:11px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:10px;"><strong>Yesterday's focus:</strong> ${d.previousFocus.slice(0, 120)}${d.previousFocus.length > 120 ? '…' : ''}</p>` : ''}
+    </div>`;
+    })() : ''}
 
     <!-- 🎯 Goal: 10K Monthly Traffic -->
     ${report.strategy ? (() => {
