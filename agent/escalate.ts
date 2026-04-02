@@ -150,12 +150,13 @@ export async function escalateToSandeep(ctx: EscalationContext): Promise<false> 
 </div>`;
 
   // Send email — reply-to enables Sandeep to reply with instructions
+  // reply@inbound.sandeeps.co routes to the Resend inbound webhook via MX on inbound.sandeeps.co
   const to = AGENT_MISSION.contact;
   await sendEmail({
     to,
     subject,
     html,
-    replyTo: 'reply@sandeeps.co',
+    replyTo: 'reply@inbound.sandeeps.co',
   }).catch((e) => console.error('[Escalate] Failed to send escalation email:', e));
 
   // Log to DB

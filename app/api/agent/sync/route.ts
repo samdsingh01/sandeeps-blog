@@ -19,6 +19,7 @@ import { runCTROptimizer } from '@/agent/ctr';
 import { runABTitleTests } from '@/agent/abtitle';
 import { runAutoExec }    from '@/agent/autoexec';
 import { rebuildMemory }  from '@/agent/memory';
+import { runPatcher }     from '@/agent/patch';
 
 export const dynamic    = 'force-dynamic';
 export const maxDuration = 60;
@@ -84,6 +85,21 @@ export async function POST(req: Request) {
       console.warn('[Sync] AutoExec failed (non-fatal):', e);
     }
 
+    // 8. Surgical quality patching — scan all published posts and fix the top 3
+    //    most critical issues (bad title, wrong category, missing Quick Answer,
+    //    short FAQs, thin sections, bad description). Runs daily so published
+    //    posts are continuously improved without manual intervention.
+    let patchResult: Awaited<ReturnType<typeof runPatcher>> | null = null;
+    try {
+      patchResult = await runPatcher(3);
+      console.log(
+        `[Sync] Patcher — scanned ${patchResult.scanned}, patched ${patchResult.patched}, ` +
+        `${patchResult.totalFixes} fixes applied`,
+      );
+    } catch (e) {
+      console.warn('[Sync] Patcher failed (non-fatal):', e);
+    }
+
     console.log('[Sync] ✅ Complete');
 
     return Response.json({
@@ -103,6 +119,18 @@ export async function POST(req: Request) {
             keywordsQueued: autoExecResult.keywordsQueued,
             tasksLogged:    autoExecResult.tasksLogged,
             focus:          autoExecResult.strategyFocus.slice(0, 80),
+          }
+        : null,
+      qualityPatch: patchResult
+        ? {
+            scanned:    patchResult.scanned,
+            patched:    patchResult.patched,
+            totalFixes: patchResult.totalFixes,
+            posts:      patchResult.results.map((r) => ({
+              slug:    r.slug,
+              applied: r.totalApplied,
+              fixes:   r.patches.filter((p) => p.applied).map((p) => p.type),
+            })),
           }
         : null,
     });

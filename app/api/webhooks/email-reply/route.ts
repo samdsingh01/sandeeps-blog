@@ -4,12 +4,21 @@
  * Inbound email webhook — receives Sandeep's email replies via Resend.
  *
  * ── ONE-TIME SETUP ────────────────────────────────────────────────────────────
- * 1. In Resend dashboard → Domains → sandeeps.co → verify your domain
- * 2. In Resend dashboard → Inbound → "Create route":
- *      Match: reply@sandeeps.co
+ * 1. In your DNS provider, add ONE record for the inbound subdomain:
+ *      Type:  MX
+ *      Name:  inbound          (creates inbound.sandeeps.co)
+ *      Value: inbound.resend.com
+ *      TTL:   3600
+ *    ⚠️  Use the SUBDOMAIN "inbound" — NOT the root domain. This avoids
+ *       breaking any existing email on sandeeps.co.
+ *
+ * 2. In Resend dashboard → Domains → "Add domain": inbound.sandeeps.co
+ *    (or verify it's auto-detected once the MX record propagates)
+ *
+ * 3. In Resend dashboard → Inbound → "Create route":
+ *      Match: reply@inbound.sandeeps.co   (or *@inbound.sandeeps.co)
  *      Webhook URL: https://sandeeps.co/api/webhooks/email-reply
- * 3. Add MX record to your DNS (Resend provides the exact record):
- *      sandeeps.co  MX  10  inbound.resend.com
+ *
  * 4. Add env var: RESEND_WEBHOOK_SECRET = <from Resend webhook settings>
  *
  * After setup, every reply to any agent email (escalations, brainstorm briefs,
@@ -31,7 +40,7 @@
  *   "type": "email.received",
  *   "data": {
  *     "from": "Sandeep Singh <sandeep.singh@graphy.com>",
- *     "to": ["reply@sandeeps.co"],
+ *     "to": ["reply@inbound.sandeeps.co"],
  *     "subject": "Re: 🧠 Weekly Intelligence Brief — 2026-W12",
  *     "text": "Write about YouTube Shorts monetization next week",
  *     "html": "<p>Write about YouTube Shorts...</p>",
@@ -136,7 +145,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         to:      REPORT_TO,
         subject: `Re: ${subject.startsWith('Re: ') ? subject.slice(4) : subject} — Done ✅`,
         html:    confirmHtml,
-        replyTo: 'reply@sandeeps.co',
+        replyTo: 'reply@inbound.sandeeps.co',
       });
     }
 

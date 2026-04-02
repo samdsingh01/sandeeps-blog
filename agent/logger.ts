@@ -14,7 +14,8 @@ export type RunType =
   | 'internal_linking'
   | 'seo_check'
   | 'health_check'
-  | 'self_heal';
+  | 'self_heal'
+  | 'content_patch';
 export type RunStatus = 'success' | 'error' | 'skipped';
 
 export async function logRun(params: {

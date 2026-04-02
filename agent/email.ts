@@ -16,7 +16,7 @@ interface SendEmailParams {
   subject:  string;
   html:     string;
   from?:    string;
-  /** Reply-To header — set to reply@sandeeps.co so all replies hit the inbound webhook */
+  /** Reply-To header — set to reply@inbound.sandeeps.co so all replies hit the inbound webhook */
   replyTo?: string;
 }
 
