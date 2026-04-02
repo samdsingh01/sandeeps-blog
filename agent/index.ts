@@ -29,6 +29,7 @@
  */
 
 import { getServiceClient }                                                        from '../lib/supabase';
+import { askFast }                                                                  from './gemini';
 import { pickTodaysTopic, markKeywordUsed, autoRefillIfLow }                      from './keywords';
 import { classifyCategory, generatePost, generateTofuPost, renderMarkdown, calcReadingTime, slugify } from './content';
 import { fetchCoverImage, generateContentImages, injectContentImages }            from './images';
@@ -36,13 +37,15 @@ import { logRun }                                                               
 import { getFeedbackInsights }                                                     from './feedback';
 import { runInternalLinking }                                                      from './links';
 import { generateDistributionDrafts }                                              from './distribute';
-import { checkContentQuality, summariseQualityReport, QualityReport }             from './quality';
+import { checkContentQuality, summariseQualityReport, QualityReport,
+         runPublishChecklist }                                                      from './quality';
 import { generateTitleVariant }                                                    from './abtitle';
 import { healPost }                                                                from './selfheal';
 import { checkKeywordHealth, escalateToSandeep }                                  from './escalate';
 import { pickTrendingCreatorTopic }                                                from './trends';
 import { analyzeCompetitors }                                                      from './competitors';
 import { getCurrentWeekExperiment }                                                from './brainstorm';
+import { readMemory, buildMemoryContext, updateMemoryAfterPublish }                from './memory';
 
 export interface PostResult {
   slug:         string;
@@ -246,6 +249,16 @@ async function runBofuPost({
 }: RunPostOptions): Promise<PostResult | null> {
 
   try {
+    // 0. Load agent memory — gives the content generator full context:
+    //    what's been covered, which categories are under-served, brand voice rules,
+    //    past quality failure patterns, top-performing formats.
+    const memory = await readMemory().catch(() => null);
+    const memoryCtx = memory ? buildMemoryContext(memory) : '';
+    if (memory) {
+      const needsMore = memory.needsMoreContent.slice(0, 2).join(', ');
+      console.log(`[Agent/BOFU] Memory loaded — ${memory.coveredTopics.length} covered, needs: ${needsMore}`);
+    }
+
     // 1. Pick today's keyword-based BOFU topic
     const topic = await pickTodaysTopic(existingSlugs);
     console.log(`[Agent/BOFU] Topic: "${topic}"`);
@@ -268,68 +281,136 @@ async function runBofuPost({
     }
     console.log(`[Agent/BOFU] This week's format experiment: "${weeklyExperiment.format}"`);
 
-    // 3b. Generate post (with competitor intelligence + weekly format experiment)
-    let generated = await generatePost(topic, category, insights ?? undefined, undefined, competitors, weeklyExperiment);
+    // 3b. Generate post (with competitor intelligence + weekly format experiment + memory context)
+    let generated = await generatePost(topic, category, insights ?? undefined, undefined, competitors, weeklyExperiment, memoryCtx);
     let { title, description, slug: rawSlug, tags, seoKeywords, faqs, markdown } = generated;
 
     if (title === topic || title === topic.toLowerCase()) {
       title = topic.replace(/\b\w/g, (c) => c.toUpperCase());
     }
 
-    // 4. Quality gate — check and optionally regenerate
-    let qualityReport: QualityReport = checkContentQuality(markdown, title, seoKeywords[0] ?? topic);
-    console.log(`[Agent/BOFU] ${summariseQualityReport(qualityReport)}`);
-
-    if (!qualityReport.passed) {
-      console.log(`[Agent/BOFU] 🔄 Regenerating (score ${qualityReport.score}/100)...`);
-      const failureContext = buildFailureContext(qualityReport, markdown);
-      const retry = await generatePost(topic, category, insights ?? undefined, failureContext, competitors, weeklyExperiment);
-      const retryQuality = checkContentQuality(retry.markdown, retry.title, retry.seoKeywords[0] ?? topic);
-
-      if (retryQuality.score > qualityReport.score) {
-        generated = retry;
-        ({ title, description, slug: rawSlug, tags, seoKeywords, faqs, markdown } = retry);
-        qualityReport = retryQuality;
-      }
-
-      // Escalate if still below minimum threshold after 2 attempts
-      if (qualityReport.score < 50) {
-        await escalateToSandeep({
-          trigger:  'Content quality score < 50 after 2 attempts',
-          action:   `Publish BOFU post about: "${topic}"`,
-          details:  { topic, category, qualityScore: qualityReport.score, issues: qualityReport.issues.map((i) => i.code) },
-          skipPost: false,
-        });
-      }
-    }
-
-    const publishStatus: 'published' | 'draft' = qualityReport.score >= 65 ? 'published' : 'draft';
-
-    // 5. Ensure unique slug
+    // 4. Comprehensive pre-publish checklist — covers ALL dimensions:
+    //    title quality, category accuracy, AEO compatibility, content quality,
+    //    cover image, slug, meta description. Each has specific fix actions.
     let slug = rawSlug || slugify(title);
     if (existingSlugs.includes(slug)) slug = `${slug}-${Date.now()}`;
 
-    // 6. Render + images
     const contentHtml = await renderMarkdown(markdown);
     const readingTime  = calcReadingTime(markdown);
     const [coverImage, contentImages] = await Promise.all([
-      fetchCoverImage(topic, category, slug, title),   // pass title for OG card display
+      fetchCoverImage(topic, category, slug, title),
       generateContentImages(markdown, topic, category, slug),
     ]);
     const enrichedHtml = injectContentImages(contentHtml, contentImages);
 
+    let checklist = runPublishChecklist({
+      title, description, markdown, category, faqs,
+      slug, coverImage, seoKeywords, topic,
+    });
+    console.log(`[Agent/BOFU] ${checklist.summary}`);
+
+    // Fix title first (without regenerating the whole post)
+    if (checklist.recommendation === 'fix_title') {
+      console.log(`[Agent/BOFU] 🔧 Title fix needed: "${title}" — regenerating title only`);
+      try {
+        const betterTitle = await askFast(
+          `You are writing a blog post about: "${topic}"
+Category: ${category}
+The current title is too short or vague: "${title}"
+
+Write a new SEO title that:
+- Is 50–68 characters long (count carefully)
+- Starts with a clear action ("How to", "X Best", "Complete Guide to", "Why")
+- Includes the main keyword within the first 5 words
+- Adds a specificity hook: year 2026, a number, or "for YouTube Creators"
+- Is benefit-driven — reader knows what they'll gain
+
+Good examples:
+  ✅ "How to Monetize YouTube With 1,000 Subscribers in 2026" (55 chars)
+  ✅ "7 Best AI Tools for YouTube Creators That Save 10 Hours" (56 chars)
+  ✅ "YouTube Partner Program: How to Get Monetized Fast in 2026" (59 chars)
+
+Return ONLY the improved title — no quotes, no explanation.`,
+          100, 0.4,
+        );
+        const cleaned = betterTitle.trim().replace(/^["']|["']$/g, '');
+        if (cleaned.length >= 40 && cleaned.length <= 75) {
+          console.log(`[Agent/BOFU] ✅ Title fixed: "${title}" → "${cleaned}"`);
+          title = cleaned;
+          // Re-run checklist with new title
+          checklist = runPublishChecklist({ title, description, markdown, category, faqs, slug, coverImage, seoKeywords, topic });
+          console.log(`[Agent/BOFU] Re-check after title fix: ${checklist.summary}`);
+        }
+      } catch (e) {
+        console.warn('[Agent/BOFU] Title fix failed (non-fatal):', e);
+      }
+    }
+
+    // Fix category mismatch (no regeneration needed — just correct the data)
+    let finalCategory = category;
+    if (checklist.recommendation === 'fix_category') {
+      const catDim = checklist.dimensions.find((d) => d.name === 'Category' && !d.passed);
+      if (catDim) {
+        // Re-run the classifier with the actual generated title (more accurate than keyword)
+        const reclassified = await classifyCategory(title).catch(() => category);
+        if (reclassified !== category) {
+          console.log(`[Agent/BOFU] 🔧 Category corrected: "${category}" → "${reclassified}"`);
+          finalCategory = reclassified;
+        }
+      }
+      checklist = runPublishChecklist({ title, description, markdown, category: finalCategory, faqs, slug, coverImage, seoKeywords, topic });
+    }
+
+    // Full regeneration only if content quality itself is poor
+    let qualityReport = checkContentQuality(markdown, title, seoKeywords[0] ?? topic);
+    if (checklist.recommendation === 'regenerate') {
+      console.log(`[Agent/BOFU] 🔄 Regenerating (${checklist.summary})...`);
+      const failureContext = buildFailureContext(qualityReport, markdown);
+      const retry = await generatePost(topic, finalCategory, insights ?? undefined, failureContext, competitors, weeklyExperiment, memoryCtx);
+      const retryChecklist = runPublishChecklist({
+        title: retry.title, description: retry.description, markdown: retry.markdown,
+        category: finalCategory, faqs: retry.faqs, slug, coverImage,
+        seoKeywords: retry.seoKeywords, topic,
+      });
+      if (retryChecklist.dimensions.filter((d) => d.passed).length >= checklist.dimensions.filter((d) => d.passed).length) {
+        generated = retry;
+        ({ title, description, tags, seoKeywords, faqs, markdown } = retry);
+        checklist = retryChecklist;
+        qualityReport = checkContentQuality(markdown, title, seoKeywords[0] ?? topic);
+      }
+    }
+
+    // Escalate if still has critical failures after all fixes
+    const criticalTitleFail = checklist.dimensions.find((d) => d.name === 'Title' && d.score < 40);
+    if (criticalTitleFail) {
+      await escalateToSandeep({
+        trigger:  `Post has critical title failure after fix attempt`,
+        action:   `Publish BOFU post about: "${topic}"`,
+        details:  { topic, category: finalCategory, title, checklist: checklist.summary },
+        skipPost: false,
+      }).catch(() => {});
+    }
+
+    const publishStatus: 'published' | 'draft' =
+      (qualityReport.score >= 65 && checklist.dimensions.filter((d) => d.name === 'Title')[0]?.score >= 70)
+        ? 'published' : 'draft';
+
     // 7. Write to Supabase
     await insertPost(db, {
-      slug, title, description, markdown, enrichedHtml,
-      category, tags, coverImage, seoKeywords, readingTime,
+      slug, title, description, markdown,
+      enrichedHtml: await renderMarkdown(markdown),  // re-render if markdown changed
+      category: finalCategory, tags, coverImage, seoKeywords, readingTime,
       faqs, publishStatus, qualityScore: qualityReport.score,
     });
 
     // 8. Mark keyword used
     await markKeywordUsed(topic);
 
-    // 9. Post-publish async tasks
-    runPostPublishTasks(slug, title, topic, category, publishStatus);
+    // 9. Update agent memory with this new post
+    updateMemoryAfterPublish(title, slug, finalCategory).catch(() => {/* non-fatal */});
+
+    // 10. Post-publish async tasks
+    runPostPublishTasks(slug, title, topic, finalCategory, publishStatus);
 
     return { slug, title, qualityScore: qualityReport.score, status: publishStatus, type: 'bofu' };
 

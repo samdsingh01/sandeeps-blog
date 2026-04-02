@@ -251,14 +251,52 @@ export function checkContentQuality(
     score -= 5;
   }
 
-  // ── 10. Title quality ─────────────────────────────────────────────────────────
-  if (title.length > 65) {
-    warnings.push(`Title is ${title.length} chars (ideal: 50-60). May get truncated in SERPs.`);
+  // ── 10. Title quality — HARD BLOCKS (not warnings) ──────────────────────────
+  // A bad title is unfixable by regenerating the body. It blocks everything:
+  // SEO rankings, CTR, AEO citations, cover image readability.
+  //
+  // HARD BLOCKS (force regenerate):
+  //   < 30 chars      → stub title like "YouTube's Partner" — never acceptable
+  //   < 40 chars      → too short for SEO/AEO/cover image display
+  //   stub patterns   → "[Word]'s [Word]", "The [Word]", single-concept titles
+  //   no action word  → titles with no verb, number, or benefit signal
+  //
+  // SOFT WARNINGS (point deductions only):
+  //   > 70 chars      → will be truncated in SERPs
+  //   no year/number  → less clickable (suggested: add 2026 or stat)
+
+  const STUB_PATTERNS = [
+    /^[\w'-]+['']s \w+$/i,            // "YouTube's Partner", "Creator's Guide"
+    /^the [\w\s]{1,25}$/i,            // "The Algorithm", "The Partner Program"
+    /^[\w\s]{1,20}$/i,                // anything under 20 chars total (single concept)
+    /^(what|why|how) is [\w\s]{1,30}$/i, // "What is YouTube" (no benefit hook)
+    /^(youtube|creator|content|course)[\s:][\w\s]{1,20}$/i, // "YouTube: Tips"
+  ];
+
+  const titleWordCount = title.trim().split(/\s+/).length;
+  const hasActionOrNumber = /\d|how to|best|guide|ways|tips|steps|make|earn|build|grow|start|scale|avoid|fix|boost/i.test(title);
+  const isStubTitle = STUB_PATTERNS.some((p) => p.test(title.trim())) || titleWordCount < 4;
+
+  if (title.length < 30) {
+    // Critical failure — force to draft and require regeneration
+    issues.push({ type: 'error', code: 'STUB_TITLE_CRITICAL', message: `Title "${title}" is only ${title.length} chars — this is a stub, not a real SEO title. Must be 45–70 chars with a keyword + benefit hook.`, impact: 40 });
+    score -= 40;
+  } else if (title.length < 40) {
+    issues.push({ type: 'error', code: 'TITLE_TOO_SHORT', message: `Title "${title}" is ${title.length} chars. Minimum is 40. Add the keyword, year, or a benefit: "for creators", "in 2026", "step-by-step".`, impact: 25 });
+    score -= 25;
+  } else if (title.length > 70) {
+    warnings.push(`Title is ${title.length} chars (ideal: 50–65). May truncate in Google SERPs.`);
     score -= 3;
   }
-  if (title.length < 35) {
-    warnings.push(`Title is too short (${title.length} chars). Add the keyword and a benefit.`);
-    score -= 3;
+
+  if (isStubTitle && title.length < 50) {
+    issues.push({ type: 'error', code: 'STUB_TITLE_PATTERN', message: `Title "${title}" matches a stub pattern. Needs a full descriptive phrase: "[How to/N Best/Guide to] [Topic] [for Audience/Year/Benefit]".`, impact: 20 });
+    score -= 20;
+  }
+
+  if (!hasActionOrNumber && title.length < 55) {
+    issues.push({ type: 'warning', code: 'WEAK_TITLE', message: `Title "${title}" has no action word, number, or benefit signal. CTR will be low. Add: a number ("7 Ways"), how-to frame, or year.`, impact: 10 });
+    score -= 10;
   }
 
   // ── Sub-scores ───────────────────────────────────────────────────────────────
@@ -351,4 +389,277 @@ export function summariseQualityReport(report: QualityReport): string {
   const errors   = report.issues.filter((i) => i.type === 'error');
   const warnings = report.issues.filter((i) => i.type === 'warning');
   return `${icon} Quality ${report.score}/100 | ${report.wordCount} words | E-E-A-T: ${report.eeatScore}/40 | ${errors.length} errors, ${warnings.length} warnings`;
+}
+
+// ── Comprehensive pre-publish checklist ──────────────────────────────────────
+// Every dimension a post must pass before going live. Returns a structured
+// report used by the agent to decide: publish / fix-title / fix-category /
+// regenerate-post / draft.
+
+export interface ChecklistDimension {
+  name:     string;
+  passed:   boolean;
+  score:    number;    // 0-100 for this dimension
+  issues:   string[];
+  action:   'none' | 'fix_title' | 'fix_category' | 'regenerate' | 'draft';
+}
+
+export interface PublishChecklist {
+  overallPassed:  boolean;
+  recommendation: 'publish' | 'fix_title' | 'fix_category' | 'regenerate' | 'draft';
+  dimensions:     ChecklistDimension[];
+  summary:        string;
+}
+
+export interface ChecklistInput {
+  title:       string;
+  description: string;
+  markdown:    string;
+  category:    string;
+  faqs:        Array<{ question: string; answer: string }>;
+  slug:        string;
+  coverImage:  string;
+  seoKeywords: string[];
+  topic:       string;    // original keyword/topic this was generated from
+}
+
+export function runPublishChecklist(input: ChecklistInput): PublishChecklist {
+  const dimensions: ChecklistDimension[] = [];
+
+  // ── DIMENSION 1: Title ─────────────────────────────────────────────────────
+  (() => {
+    const issues: string[] = [];
+    let score = 100;
+    const t = input.title;
+    const wordCount = t.trim().split(/\s+/).length;
+    const hasNumber = /\d/.test(t);
+    const hasYear = /202[4-9]|2030/.test(t);
+    const hasBenefit = /how to|best|guide|ways|tips|steps|make|earn|build|grow|start|scale|avoid|fix|boost|learn|master/i.test(t);
+    const hasKeyword = input.seoKeywords.some((kw) =>
+      t.toLowerCase().includes(kw.toLowerCase().split(' ')[0]),
+    );
+
+    if (t.length < 30) { score -= 60; issues.push(`CRITICAL: "${t}" is ${t.length} chars — stub title, must regenerate`); }
+    else if (t.length < 40) { score -= 35; issues.push(`Too short (${t.length} chars) — add keyword + benefit hook`); }
+    else if (t.length < 45) { score -= 15; issues.push(`Short (${t.length} chars) — consider adding year or number`); }
+    else if (t.length > 72) { score -= 8; issues.push(`Long (${t.length} chars) — may truncate in SERPs`); }
+
+    if (wordCount < 4)           { score -= 25; issues.push(`Only ${wordCount} words — needs a full descriptive phrase`); }
+    if (!hasBenefit && !hasNumber) { score -= 15; issues.push('No action word or number — add "How to", a number, or a benefit'); }
+    if (!hasKeyword)              { score -= 10; issues.push('Primary keyword not in title — include it near the start'); }
+    if (!hasYear && !hasNumber)   { issues.push('TIP: Adding year (2026) or a number improves CTR by ~30%'); }
+
+    const passed = score >= 70;
+    dimensions.push({
+      name:   'Title',
+      passed,
+      score:  Math.max(0, score),
+      issues,
+      action: score < 40 ? 'fix_title' : score < 70 ? 'fix_title' : 'none',
+    });
+  })();
+
+  // ── DIMENSION 2: Meta Description ─────────────────────────────────────────
+  (() => {
+    const issues: string[] = [];
+    let score = 100;
+    const d = input.description;
+    if (!d || d.length < 80)   { score -= 30; issues.push(`Too short (${d?.length ?? 0} chars) — aim for 130–155`); }
+    if (d && d.length > 165)   { score -= 15; issues.push(`Too long (${d.length} chars) — truncates in Google at ~155`); }
+    if (d && !/\d/.test(d))    { score -= 10; issues.push('No number in description — adding a stat improves CTR'); }
+    const hasKw = input.seoKeywords.some((kw) => d?.toLowerCase().includes(kw.toLowerCase().split(' ')[0]));
+    if (!hasKw)                 { score -= 15; issues.push('Primary keyword not in meta description'); }
+
+    dimensions.push({
+      name:   'Meta Description',
+      passed: score >= 70,
+      score:  Math.max(0, score),
+      issues,
+      action: 'none',
+    });
+  })();
+
+  // ── DIMENSION 3: Category ─────────────────────────────────────────────────
+  (() => {
+    const issues: string[] = [];
+    let score = 100;
+    const cat = input.category;
+
+    const VALID_CATEGORIES = ['YouTube Monetization', 'Course Creation', 'Creator Growth', 'Content Strategy', 'AI for Creator Economy'];
+    if (!VALID_CATEGORIES.includes(cat)) {
+      score -= 40;
+      issues.push(`Invalid category "${cat}" — must be one of: ${VALID_CATEGORIES.join(', ')}`);
+    }
+
+    // Detect obvious mismatches using title/topic keywords
+    const titleLower = input.title.toLowerCase();
+    const topicLower = input.topic.toLowerCase();
+
+    const shouldBeMonetization = /monetiz|adsense|rpm|cpm|earn|income|revenue|pay\b|making money|partner program/
+      .test(titleLower + ' ' + topicLower);
+    const shouldBeCourse = /\bcourse\b|teach|sell online|kajabi|teachable|thinkific|membership site/
+      .test(titleLower + ' ' + topicLower);
+    const shouldBeAI = /\bai\b|chatgpt|artificial|automat|llm/
+      .test(titleLower + ' ' + topicLower);
+    const shouldBeContent = /strategy|calendar|repurpos|pillar|batch|faceless/
+      .test(titleLower + ' ' + topicLower);
+
+    if (shouldBeMonetization && cat !== 'YouTube Monetization') {
+      score -= 30;
+      issues.push(`Category mismatch: topic is about monetization but category is "${cat}" — should be "YouTube Monetization"`);
+    } else if (shouldBeCourse && cat !== 'Course Creation') {
+      score -= 30;
+      issues.push(`Category mismatch: topic is about courses but category is "${cat}" — should be "Course Creation"`);
+    } else if (shouldBeAI && cat !== 'AI for Creator Economy') {
+      score -= 20;
+      issues.push(`Category mismatch: topic is about AI but category is "${cat}" — should be "AI for Creator Economy"`);
+    } else if (shouldBeContent && cat !== 'Content Strategy') {
+      score -= 20;
+      issues.push(`Category mismatch: topic is about content strategy but category is "${cat}" — should be "Content Strategy"`);
+    }
+
+    dimensions.push({
+      name:   'Category',
+      passed: score >= 70,
+      score:  Math.max(0, score),
+      issues,
+      action: score < 70 ? 'fix_category' : 'none',
+    });
+  })();
+
+  // ── DIMENSION 4: AEO Compatibility ────────────────────────────────────────
+  (() => {
+    const issues: string[] = [];
+    let score = 100;
+    const { faqs, markdown } = input;
+
+    if (!faqs || faqs.length === 0) {
+      score -= 40;
+      issues.push('No FAQ data — FAQPage schema will be missing, losing Google AI Overview eligibility');
+    } else {
+      if (faqs.length < 4) { score -= 15; issues.push(`Only ${faqs.length} FAQs — aim for 5 to maximise coverage`); }
+
+      // Check answer quality (self-contained, specific, < 70 words)
+      const longAnswers  = faqs.filter((f) => f.answer.split(/\s+/).length > 70);
+      const vagueAnswers = faqs.filter((f) => !/\d/.test(f.answer)); // no numbers = vague
+      if (longAnswers.length > 0)  { score -= 10; issues.push(`${longAnswers.length} FAQ answer(s) exceed 70 words — AI engines prefer concise, extractable answers`); }
+      if (vagueAnswers.length > 1) { score -= 10; issues.push(`${vagueAnswers.length} FAQ answers have no numbers or specifics — add stats/timeframes`); }
+    }
+
+    // Quick Answer block in markdown
+    const hasQuickAnswer = /##\s*quick answer/i.test(markdown);
+    if (!hasQuickAnswer) {
+      score -= 20;
+      issues.push('No "## Quick Answer" section in markdown — this is the #1 Google Featured Snippet target');
+    }
+
+    // FAQ section in markdown body
+    const hasFAQSection = /##\s*(frequently asked|faq|common questions)/i.test(markdown);
+    if (!hasFAQSection) {
+      score -= 15;
+      issues.push('No FAQ section in markdown body — add "## Frequently Asked Questions" with the same Q&A');
+    }
+
+    dimensions.push({
+      name:   'AEO Compatibility',
+      passed: score >= 65,
+      score:  Math.max(0, score),
+      issues,
+      action: score < 40 ? 'regenerate' : 'none',
+    });
+  })();
+
+  // ── DIMENSION 5: Content Quality ──────────────────────────────────────────
+  (() => {
+    const contentReport = checkContentQuality(input.markdown, input.title, input.seoKeywords[0] ?? input.topic);
+    const issues = [
+      ...contentReport.issues.map((i) => `[${i.code}] ${i.message}`),
+      ...contentReport.warnings,
+    ];
+    dimensions.push({
+      name:   'Content Quality',
+      passed: contentReport.passed,
+      score:  contentReport.score,
+      issues,
+      action: contentReport.recommendation === 'regenerate' ? 'regenerate'
+            : contentReport.recommendation === 'draft'      ? 'draft'
+            : 'none',
+    });
+  })();
+
+  // ── DIMENSION 6: Cover Image ───────────────────────────────────────────────
+  (() => {
+    const issues: string[] = [];
+    let score = 100;
+    const img = input.coverImage;
+
+    if (!img || img === '/images/default-cover.svg' || img === '') {
+      score -= 50;
+      issues.push('No cover image — posts without images get significantly lower CTR and social shares');
+    } else if (!img.includes(input.slug) && !img.includes('api/og')) {
+      score -= 10;
+      issues.push('Cover image may not be post-specific — verify it matches this post\'s content');
+    }
+
+    if (img && img.includes('api/og')) {
+      // OG card — good! Check if title is in URL params
+      if (!img.includes('title=')) {
+        score -= 15;
+        issues.push('OG card URL missing title parameter — cover image will show wrong title');
+      }
+    }
+
+    dimensions.push({
+      name:   'Cover Image',
+      passed: score >= 50,
+      score:  Math.max(0, score),
+      issues,
+      action: 'none',
+    });
+  })();
+
+  // ── DIMENSION 7: Slug ─────────────────────────────────────────────────────
+  (() => {
+    const issues: string[] = [];
+    let score = 100;
+    const s = input.slug;
+
+    if (s.length > 75)         { score -= 15; issues.push(`Slug too long (${s.length} chars) — keep under 60`); }
+    if (/[A-Z]/.test(s))       { score -= 20; issues.push('Slug contains uppercase — must be all lowercase'); }
+    if (/[^a-z0-9-]/.test(s))  { score -= 20; issues.push('Slug contains special chars — only a-z, 0-9, hyphens allowed'); }
+    if (s.split('-').length < 3){ score -= 10; issues.push('Slug too short — include 3+ keyword words'); }
+    if (/^\d/.test(s))          { score -= 10; issues.push('Slug starts with a number — not SEO friendly'); }
+
+    dimensions.push({
+      name:   'Slug',
+      passed: score >= 70,
+      score:  Math.max(0, score),
+      issues,
+      action: 'none',
+    });
+  })();
+
+  // ── Overall verdict ────────────────────────────────────────────────────────
+  const failedDimensions = dimensions.filter((d) => !d.passed);
+  const criticalFails = dimensions.filter((d) => !d.passed && d.action !== 'none');
+
+  // Priority: fix_title first (most visible), then fix_category, then regenerate, then draft
+  let recommendation: PublishChecklist['recommendation'] = 'publish';
+  if (dimensions.some((d) => d.action === 'fix_title'))    recommendation = 'fix_title';
+  else if (dimensions.some((d) => d.action === 'fix_category')) recommendation = 'fix_category';
+  else if (dimensions.some((d) => d.action === 'regenerate'))   recommendation = 'regenerate';
+  else if (dimensions.some((d) => d.action === 'draft'))         recommendation = 'draft';
+
+  const overallPassed = recommendation === 'publish';
+
+  const passMark = dimensions.filter((d) => d.passed).length;
+  const summary = [
+    `${overallPassed ? '✅ READY TO PUBLISH' : '❌ BLOCKED'} — ${passMark}/${dimensions.length} checks passed`,
+    failedDimensions.length > 0
+      ? `Failures: ${failedDimensions.map((d) => d.name).join(', ')}`
+      : 'All checks passed',
+    `Action: ${recommendation.replace(/_/g, ' ').toUpperCase()}`,
+  ].join(' | ');
+
+  return { overallPassed, recommendation, dimensions, summary };
 }

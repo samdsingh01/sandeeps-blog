@@ -164,6 +164,7 @@ export async function generatePost(
   failureContext?:    string,
   competitors?:       CompetitorInsights | null,
   weeklyExperiment?:  WeeklyExperiment | null,
+  memoryContext?:     string,
 ): Promise<{ title: string; description: string; slug: string; markdown: string; tags: string[]; seoKeywords: string[]; faqs: FAQItem[] }> {
 
   const perfContext = insights?.hasData && insights.agentPromptCtx
@@ -171,6 +172,10 @@ export async function generatePost(
   const queryHints = insights?.topSearchQueries?.length
     ? `\nReal search queries from Google to weave in naturally:\n${insights.topSearchQueries.slice(0, 6).map((q) => `  - ${q}`).join('\n')}` : '';
   const retryContext = failureContext ? `\n${failureContext}\n` : '';
+
+  // Agent memory context — contains: covered topics (avoid), brand voice rules,
+  // category gaps, top-performing formats, past quality lessons
+  const memCtx = memoryContext ? `\n${memoryContext}\n` : '';
 
   // Competitor intelligence block (injected when available)
   const competitorCtx = competitors?.competitorContext
@@ -397,6 +402,7 @@ AI CATEGORY RULES (mandatory):
   const contentPrompt = `
 You are Sandeep Singh, co-founder of Graphy.com — a platform trusted by 50,000+ creators.
 ${missionCtx}
+${memCtx}
 ${retryContext}
 ${competitorCtx}
 ${experimentCtx}

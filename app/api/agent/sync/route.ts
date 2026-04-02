@@ -17,7 +17,8 @@ import { fetchPagePerformance } from '@/agent/gsc';
 import { storePagePerformance, getFeedbackInsights, boostKeywordsFromFeedback } from '@/agent/feedback';
 import { runCTROptimizer } from '@/agent/ctr';
 import { runABTitleTests } from '@/agent/abtitle';
-import { runAutoExec } from '@/agent/autoexec';
+import { runAutoExec }    from '@/agent/autoexec';
+import { rebuildMemory }  from '@/agent/memory';
 
 export const dynamic    = 'force-dynamic';
 export const maxDuration = 60;
@@ -54,7 +55,22 @@ export async function POST(req: Request) {
     const abSwaps   = abResults.filter((r) => r.action === 'swapped_to_b').length;
     const abWinners = abResults.filter((r) => r.winner).length;
 
-    // 6. Auto-execute today's strategic recommendations (non-blocking)
+    // 6. Rebuild agent memory — full refresh of covered topics, category balance,
+    //    brand voice rules, quality lessons. Runs daily so content generation
+    //    always has fresh context before each post.
+    let memoryResult: { coveredTopics: number; needsMoreContent: string[] } | null = null;
+    try {
+      const mem = await rebuildMemory();
+      memoryResult = {
+        coveredTopics:    mem.coveredTopics.length,
+        needsMoreContent: mem.needsMoreContent.slice(0, 3),
+      };
+      console.log(`[Sync] Memory rebuilt — ${mem.coveredTopics.length} topics tracked`);
+    } catch (e) {
+      console.warn('[Sync] Memory rebuild failed (non-fatal):', e);
+    }
+
+    // 7. Auto-execute today's strategic recommendations (non-blocking)
     //    This queues content keywords, logs distribution/technical tasks,
     //    and stores a daily snapshot for delta reporting in tomorrow's email.
     let autoExecResult: Awaited<ReturnType<typeof runAutoExec>> | null = null;
@@ -81,6 +97,7 @@ export async function POST(req: Request) {
       ctrOptimized:    ctrResults.length,
       abTitleTests:    { checked: abResults.length, swapped: abSwaps, winnersDecided: abWinners },
       hotCategories:   insights.hotCategories,
+      memory: memoryResult,
       autoExec: autoExecResult
         ? {
             keywordsQueued: autoExecResult.keywordsQueued,
