@@ -17,9 +17,10 @@ import { fetchPagePerformance } from '@/agent/gsc';
 import { storePagePerformance, getFeedbackInsights, boostKeywordsFromFeedback } from '@/agent/feedback';
 import { runCTROptimizer } from '@/agent/ctr';
 import { runABTitleTests } from '@/agent/abtitle';
-import { runAutoExec }    from '@/agent/autoexec';
-import { rebuildMemory }  from '@/agent/memory';
-import { runPatcher }     from '@/agent/patch';
+import { runAutoExec }      from '@/agent/autoexec';
+import { rebuildMemory }    from '@/agent/memory';
+import { runPatcher }       from '@/agent/patch';
+import { sendAgentMessage } from '@/agent/agentchat';
 
 export const dynamic    = 'force-dynamic';
 export const maxDuration = 60;
@@ -101,6 +102,22 @@ export async function POST(req: Request) {
     }
 
     console.log('[Sync] ✅ Complete');
+
+    // Notify the admin chat with a sync summary
+    const patchSummary = patchResult && patchResult.patched > 0
+      ? `\n🩹 Patched **${patchResult.patched}** posts (${patchResult.totalFixes} fixes)`
+      : '';
+    const autoExecSummary = autoExecResult && autoExecResult.keywordsQueued > 0
+      ? `\n🔑 Queued **${autoExecResult.keywordsQueued}** new keywords from strategy`
+      : '';
+    await sendAgentMessage(
+      `🔄 **Daily sync complete**\n\n` +
+      `• ${pages.length} pages synced from GSC\n` +
+      `• ${boostedCount} keywords boosted\n` +
+      `• ${ctrResults.length} titles CTR-optimised${autoExecSummary}${patchSummary}`,
+      'sync_complete',
+      { pages: pages.length, boosted: boostedCount, patched: patchResult?.patched ?? 0 },
+    ).catch(() => {});
 
     return Response.json({
       success:         true,

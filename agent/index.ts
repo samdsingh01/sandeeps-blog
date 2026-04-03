@@ -46,6 +46,7 @@ import { pickTrendingCreatorTopic }                                             
 import { analyzeCompetitors }                                                      from './competitors';
 import { getCurrentWeekExperiment }                                                from './brainstorm';
 import { readMemory, buildMemoryContext, updateMemoryAfterPublish }                from './memory';
+import { sendAgentMessage }                                                        from './agentchat';
 
 export interface PostResult {
   slug:         string;
@@ -556,6 +557,15 @@ function runPostPublishTasks(
   healPost(slug).then((r) => {
     if (r.healed > 0) console.log(`[Agent] 🔧 Self-heal fixed ${r.healed} issues on "${slug}"`);
   }).catch((err) => console.error('[Agent] Self-heal error (non-fatal):', err));
+
+  // Notify admin chat regardless of publish status
+  sendAgentMessage(
+    publishStatus === 'published'
+      ? `✅ **Published:** "${title}"\n\ncategory: ${category} · slug: \`${slug}\`\n\nView it at [sandeeps.co/blog/${slug}](https://sandeeps.co/blog/${slug})`
+      : `📝 **Saved as draft:** "${title}"\n\ncategory: ${category} · quality score too low to auto-publish.\n\nSay "Approve ${slug}" to publish it manually.`,
+    publishStatus === 'published' ? 'post_published' : 'quality_issue',
+    { slug, title, category, publishStatus },
+  ).catch(() => {});
 
   if (publishStatus !== 'published') return;
 

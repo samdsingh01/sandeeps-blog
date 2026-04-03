@@ -20,8 +20,9 @@
  *   - Trend topic seems controversial or potentially harmful
  */
 
-import { sendEmail }       from './email';
-import { getServiceClient } from '../lib/supabase';
+import { sendEmail }          from './email';
+import { getServiceClient }   from '../lib/supabase';
+import { sendAgentMessage }   from './agentchat';
 
 // ── Agent Mission Config ──────────────────────────────────────────────────────
 // This is the single source of truth for what the agent does and why.
@@ -169,6 +170,13 @@ export async function escalateToSandeep(ctx: EscalationContext): Promise<false> 
       error:     `ESCALATED: ${ctx.trigger}`,
     });
   } catch { /* non-fatal */ }
+
+  // Also push to the admin chat so Sandeep sees it in /admin/chat
+  await sendAgentMessage(
+    `⚠️ **Action paused — needs your input**\n\n**Trigger:** ${ctx.trigger}\n**Action paused:** ${ctx.action}\n\nI've sent you an email with details. Reply here with instructions or come to this chat.`,
+    'escalation',
+    { trigger: ctx.trigger, action: ctx.action, ...ctx.details },
+  );
 
   console.warn(`[Agent] 🚨 ESCALATED to Sandeep — trigger: "${ctx.trigger}" | action: "${ctx.action}"`);
   return false;
