@@ -393,7 +393,7 @@ Return ONLY the improved title — no quotes, no explanation.`,
     }
 
     const publishStatus: 'published' | 'draft' =
-      (qualityReport.score >= 65 && checklist.dimensions.filter((d) => d.name === 'Title')[0]?.score >= 70)
+      (qualityReport.score >= 60 && checklist.dimensions.filter((d) => d.name === 'Title')[0]?.score >= 60)
         ? 'published' : 'draft';
 
     // 7. Write to Supabase

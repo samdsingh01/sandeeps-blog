@@ -137,16 +137,35 @@ AI for Creator Economy`;
 
   // Layer 3: keyword heuristics on the TOPIC itself (bypasses Gemini entirely)
   const t = topic.toLowerCase();
-  if (/monetiz|adsense|rpm|cpm|earn|income|revenue|pay\b|making money|partner program/.test(t))
+  if (/monetiz|adsense|rpm|cpm|earn|income|revenue|pay\b|making money|partner program|brand deal|sponsorship|affiliate|super thanks|channel member/.test(t))
     return 'YouTube Monetization';
-  if (/\bcourse\b|teach|sell (online|course|digital)|kajabi|teachable|thinkific|gumroad|membership site/.test(t))
+  if (/\bcourse\b|teach|sell (online|course|digital|knowledge)|kajabi|teachable|thinkific|gumroad|membership site|digital product|online product/.test(t))
     return 'Course Creation';
-  if (/\bai\b|chatgpt|artificial intel|automat(e|ion)|llm|midjourney|dalle|voiceover ai/.test(t))
+  if (/\bai\b|chatgpt|artificial intel|automat(e|ion)|llm|midjourney|dall.?e|voiceover ai|ai tool|ai video|ai script|ai thumbnail/.test(t))
     return 'AI for Creator Economy';
-  if (/strategy|calendar|repurpos|pillar|batch|editorial|faceless|multi.?platform|content seo/.test(t))
+  if (/strategy|calendar|repurpos|pillar|batch|editorial|faceless|multi.?platform|content seo|content plan|scripting|workflow|hook/.test(t))
     return 'Content Strategy';
+  // Explicit Creator Growth signals (subscriber/view/algorithm growth)
+  if (/subscriber|algorithm|watch time|retention|niche|thumbnail|click.?through|ctr|channel growth|views|viral|trending|shorts growth/.test(t))
+    return 'Creator Growth';
 
-  // Layer 4: true last resort (only if everything else fails)
+  // Layer 4: Ask Gemini one more time with a simpler prompt before falling back
+  try {
+    const retry = (await askFast(
+      `Pick ONE category for this creator blog topic: "${topic}"\n\nOptions:\n1. YouTube Monetization (earning money from YouTube)\n2. Course Creation (making/selling online courses)\n3. Creator Growth (growing YouTube channel audience)\n4. Content Strategy (planning/distributing content)\n5. AI for Creator Economy (AI tools for creators)\n\nReply with the number only (1-5).`,
+      10, 0.1,
+    )).trim();
+    const map: Record<string, string> = {
+      '1': 'YouTube Monetization',
+      '2': 'Course Creation',
+      '3': 'Creator Growth',
+      '4': 'Content Strategy',
+      '5': 'AI for Creator Economy',
+    };
+    if (map[retry]) return map[retry];
+  } catch { /* fall through */ }
+
+  // Layer 5: true last resort
   console.warn(`[Category] Could not classify "${topic}" — falling back to Creator Growth`);
   return 'Creator Growth';
 }

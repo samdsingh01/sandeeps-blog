@@ -46,11 +46,18 @@ const nextConfig = {
     ];
   },
 
-  // Redirects — add any old URLs you want to 301 redirect here
+  // Redirects
   async redirects() {
     return [
-      // Example: redirect /blog/old-post → /blog/new-post
-      // { source: '/blog/old-post', destination: '/blog/new-post', permanent: true },
+      // Canonical: www → non-www (permanent 301)
+      // Fixes Google Search Console "Page with redirect" errors for sandeeps.co
+      // and prevents duplicate indexing of www vs non-www URLs.
+      {
+        source:      '/:path*',
+        has:         [{ type: 'host', value: 'www.sandeeps.co' }],
+        destination: 'https://sandeeps.co/:path*',
+        permanent:   true,
+      },
     ];
   },
 };
