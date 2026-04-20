@@ -46,19 +46,10 @@ const nextConfig = {
     ];
   },
 
-  // Redirects
+  // Redirects — Vercel handles www → non-www at CDN level automatically.
+  // Do NOT add www redirect here — conflicts with Vercel and causes redirect loops.
   async redirects() {
-    return [
-      // Canonical: www → non-www (permanent 301)
-      // Fixes Google Search Console "Page with redirect" errors for sandeeps.co
-      // and prevents duplicate indexing of www vs non-www URLs.
-      {
-        source:      '/:path*',
-        has:         [{ type: 'host', value: 'www.sandeeps.co' }],
-        destination: 'https://sandeeps.co/:path*',
-        permanent:   true,
-      },
-    ];
+    return [];
   },
 };
 
